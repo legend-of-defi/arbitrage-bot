@@ -44,6 +44,7 @@ impl From<UniswapQuery::PairInfo> for PairInfo {
 }
 
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Reserves {
     pub reserve0: U256,

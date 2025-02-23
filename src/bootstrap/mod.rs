@@ -36,6 +36,7 @@ sol!(
 ///
 /// # Panics
 /// * If application context creation fails
+#[allow(dead_code)]
 pub async fn read_pairs_v2_by_range(
     factory: Address,
     from: U256,
@@ -72,6 +73,10 @@ pub async fn read_pairs_v2_by_range(
 /// * If HTTP provider creation fails
 /// * If contract calls fail
 /// * If database operations fail
+///
+/// # Panics
+/// * If application context creation fails
+/// * If database connection fails
 pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), eyre::Report> {
     let context = AppContext::new().await.expect("Failed to create context");
     let mut conn = context.conn;
@@ -159,6 +164,7 @@ pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), 
 /// # Panics
 /// * If contract call to get reserves fails
 /// * If batch request contract initialization fails
+#[allow(dead_code)]
 pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
     let provider = create_http_provider().await.unwrap();
     let uniswap_v2_batch_request = IUniswapV2BatchRequest::new(
@@ -176,7 +182,7 @@ pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
         .unwrap()
         ._0
         .into_iter()
-        .map(|reserves| reserves.into())
+        .map(Into::into)
         .collect()
 }
 
@@ -193,6 +199,7 @@ pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
 /// * If HTTP provider creation fails
 /// * If contract calls fail
 /// * If pair addresses cannot be parsed
+#[allow(dead_code)]
 pub async fn read_all_reserves(batch_size: usize) -> Vec<(String, Reserves)> {
     let mut context = AppContext::new().await.expect("app context");
     let pairs = PairService::read_all_pairs(&mut context.conn);
