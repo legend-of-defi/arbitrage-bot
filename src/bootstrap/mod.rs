@@ -163,7 +163,7 @@ pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
     let provider = create_http_provider().await.unwrap();
     let mut context = AppContext::new().await.expect("app context");
     let uniswap_v2_batch_request = IUniswapV2BatchRequest::new(
-        address!("0x8706e395F8D4CdE13A36d99F80Ef12090e8cf494"),
+        address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"),
         // context.base_remote, // Using base_remote as the provider
         provider
     );
