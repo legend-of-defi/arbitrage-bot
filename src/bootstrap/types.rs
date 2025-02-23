@@ -52,7 +52,7 @@ pub struct Reserves {
 
 impl From<[U256; 3]> for Reserves {
     fn from(reserves: [U256; 3]) -> Self {
-        Reserves {
+        Self {
             reserve0: reserves[0],
             reserve1: reserves[1],
             block_timestamp_last: reserves[2],

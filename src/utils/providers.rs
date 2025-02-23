@@ -38,6 +38,7 @@ pub async fn create_ipc_provider() -> Result<FillProvider<JoinFill<Identity, Joi
 ///
 /// # Panics
 /// * If RPC URL cannot be parsed
+#[allow(dead_code)]
 pub async fn create_http_provider() -> Result<FillProvider<JoinFill<Identity, JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>>, RootProvider, Ethereum>, Error> {
     let config = Config::from_env();
     let provider = ProviderBuilder::new().on_http(config.rpc_url.parse().unwrap());

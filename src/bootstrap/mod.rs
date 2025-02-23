@@ -1,19 +1,16 @@
 pub mod types;
 
-use std::ops::Add;
-use std::str::FromStr;
 use alloy::{
-    primitives::{Address, U256, address},
+    primitives::{address, Address, U256},
     sol,
 };
-use tokio::task;
-use futures::future::join_all;
+use std::ops::Add;
+use std::str::FromStr;
 
 use crate::bootstrap::types::{PairInfo, Reserves};
 use crate::db_service::{DbManager, PairService};
-use crate::models::factory::{Factory, NewFactory};
-use crate::models::pair::Pair;
-use crate::models::token::{NewToken, Token};
+use crate::models::factory::NewFactory;
+use crate::models::token::NewToken;
 use crate::utils::app_context::AppContext;
 use crate::utils::providers::create_http_provider;
 
@@ -41,11 +38,11 @@ pub async fn read_pairs_v2_by_range(
     from: U256,
     to: U256,
 ) -> Result<Vec<PairInfo>, eyre::Report> {
-    let mut app_context = AppContext::new().await.expect("app context");
+    let app_context = AppContext::new().await.expect("app context");
     let provider = app_context.base_remote;
 
     let uniswap_v2_batch_request = IUniswapV2BatchRequest::new(
-        address!("0x9D60Bb2620e9a3811462d60600865924d4f1452E"),
+        address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"),
         provider,
     );
 
@@ -73,7 +70,7 @@ pub async fn read_pairs_v2_by_range(
 /// * If contract calls fail
 /// * If database operations fail
 pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), eyre::Report> {
-    let mut context = AppContext::new().await.expect("Failed to create context");
+    let context = AppContext::new().await.expect("Failed to create context");
     let mut conn = context.conn;
     let provider = context.base_remote;
 
@@ -82,7 +79,7 @@ pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), 
         .map_or_else(|| U256::from(0), |last_index| U256::from(last_index + 1));
 
     let uniswap_v2_batch_request = IUniswapV2BatchRequest::new(
-        address!("0x01533c7844600a5A6Eccd20450A772e05633d0d5"),
+        address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"),
         provider,
     );
 
@@ -161,7 +158,6 @@ pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), 
 /// * If batch request contract initialization fails
 pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
     let provider = create_http_provider().await.unwrap();
-    let mut context = AppContext::new().await.expect("app context");
     let uniswap_v2_batch_request = IUniswapV2BatchRequest::new(
         address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"),
         // context.base_remote, // Using base_remote as the provider

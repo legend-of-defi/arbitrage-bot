@@ -16,7 +16,7 @@ mod utils;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut context = AppContext::new().await.expect("Failed to create context");
+    let context = AppContext::new().await.expect("Failed to create context");
     setup_logger().expect("Failed to set up logger");
 
     // Display all pairs with token information
