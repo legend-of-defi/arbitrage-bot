@@ -33,6 +33,9 @@ sol!(
 /// # Errors
 /// * If HTTP provider creation fails
 /// * If contract call fails
+///
+/// # Panics
+/// * If application context creation fails
 pub async fn read_pairs_v2_by_range(
     factory: Address,
     from: U256,

@@ -1,8 +1,7 @@
-use std::sync::Arc;
-use alloy::primitives::address;
 use crate::utils::logger::setup_logger;
-use crate::{bot::Bot, db_service::PairService, utils::app_context::AppContext};
-use mev_eth::bootstrap::{read_all_reserves, read_reserves_by_range};
+use crate::{bot::Bot, utils::app_context::AppContext};
+use mev_eth::bootstrap::read_all_reserves;
+use std::sync::Arc;
 
 mod arb;
 mod bot;

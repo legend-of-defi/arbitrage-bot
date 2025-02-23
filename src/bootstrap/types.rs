@@ -11,6 +11,7 @@ pub struct TokenInfo {
     pub decimals: i32
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct PairInfo {
     pub address: String,
