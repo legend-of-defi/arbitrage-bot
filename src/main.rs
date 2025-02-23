@@ -45,7 +45,7 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
 
     let _provider = create_http_provider().await?;
     let pairs =
-        read_all_pairs_v2(address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"), 3000).await;
+        read_all_pairs_v2(address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"), 3000).await;
 
     println!("pairs: {pairs:?}");
 
