@@ -19,6 +19,7 @@ eyre = "0.6.12"
 hex = "0.4.3"
 url = "2.5.0"
 serde = { version = "1", features = ["derive"] }
+clap = { version = "4.0", features = ["derive"] }
 
 [dev-dependencies]
 criterion = "0.5"
@@ -28,6 +29,6 @@ name = "arb"
 harness = false
 
 [lints.clippy]
-pedantic = { level = "warn", priority = 1 }
-nursery = { level = "warn", priority = 2 }
+pedantic = { level = "deny", priority = 1 }
+nursery = { level = "deny", priority = 2 }
 unused_variables = { level = "allow", priority = 3 }
