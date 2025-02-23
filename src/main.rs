@@ -37,16 +37,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     }
     // }
 
-    // let all_reserves = read_all_reserves(10).await;
-    let reserves = read_reserves_by_range(
-        vec![
-            address!("0x51ca916f50d2f076ba2314d7d43412be786394f6"),
-            address!("0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc"),
-            address!("0x88a43bbdf9d098eec7bceda4e2494615dfd9bb9c"),
-            address!("0x6c39acc16deb25b496c24c21e1e5f5e192ed01c8")
-        ]
-    ).await;
-    println!("\nFound {reserves:?} reserves");
+    let all_reserves = read_all_reserves(100).await;
+
+    println!("\nFound {all_reserves:?} reserves");
 
     let bot = Arc::new(Bot::new(context));
     start_bot(bot).await;
