@@ -2,7 +2,7 @@
 use std::env;
 use std::sync::Arc;
 
-use crate::bootstrap::get_all_pairs_v2;
+use crate::bootstrap::read_all_pairs_v2;
 use crate::bot::Bot;
 use crate::config::Config;
 use crate::db_service::PairService;
@@ -45,7 +45,7 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
 
     let _provider = create_http_provider().await?;
     let pairs =
-        get_all_pairs_v2(address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"), 3000).await;
+        read_all_pairs_v2(address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"), 3000).await;
 
     println!("pairs: {pairs:?}");
 
