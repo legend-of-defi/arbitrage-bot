@@ -1,0 +1,17 @@
+[Unit]
+Description=Fly Arbitrage Bot
+After=network.target
+
+[Service]
+Type=simple
+User=stas
+Group=stas
+WorkingDirectory=/home/stas/crypto
+EnvironmentFile=/opt/fly/fly.env
+ExecStart=/usr/bin/fly
+StandardOutput=append:/var/log/fly/output.log
+StandardError=append:/var/log/fly/error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF

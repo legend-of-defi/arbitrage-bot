@@ -1,0 +1,51 @@
+---
+- name: Install and configure Lighthouse
+  hosts: fly
+  become: true
+  vars:
+    lighthouse_version: "v6.0.1"
+    external_ip: "{{ ansible_host }}"
+  tasks:
+    - name: Download and install Lighthouse
+      block:
+        - name: Download Lighthouse
+          ansible.builtin.get_url:
+            url: >-
+              https://github.com/sigp/lighthouse/releases/download/{{ lighthouse_version }}/lighthouse-{{ lighthouse_version }}-x86_64-unknown-linux-gnu.tar.gz
+            dest: /tmp/lighthouse.tar.gz
+            mode: "0644"
+
+        - name: Extract Lighthouse
+          ansible.builtin.unarchive:
+            src: /tmp/lighthouse.tar.gz
+            dest: /usr/local/bin
+            remote_src: true
+            creates: /usr/local/bin/lighthouse
+            mode: "0755"
+
+    - name: Create lighthouse user
+      ansible.builtin.user:
+        name: lighthouse
+        system: true
+        groups: fly
+
+    - name: Create lighthouse directory
+      ansible.builtin.file:
+        path: /opt/lighthouse
+        state: directory
+        owner: lighthouse
+        group: fly
+        mode: "0750"
+
+    - name: Create Lighthouse service
+      ansible.builtin.template:
+        src: templates/lighthouse.service.j2
+        dest: /etc/systemd/system/lighthouse.service
+        mode: "0644"
+
+    - name: Start and enable lighthouse service
+      ansible.builtin.systemd:
+        name: lighthouse
+        state: started
+        enabled: true
+        daemon_reload: true

@@ -1,0 +1,33 @@
+[package]
+name = "mev-eth"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.43.0", features = ["full"] }
+dotenv = "0.15.0"
+fern = "0.7.1"
+log = "0.4.25"
+chrono = "0.4.39"
+serde_json = "1"
+diesel = { version = "2.2.7", features = ["postgres"] }
+fastrand = "2.0.1"
+alloy = { version = "0.11.1", features = ["full"] }
+futures = "0.3.31"
+futures-util = "0.3.31"
+eyre = "0.6.12"
+hex = "0.4.3"
+url = "2.5.0"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "arb"
+harness = false
+
+[lints.clippy]
+pedantic = { level = "warn", priority = 1 }
+nursery = { level = "warn", priority = 2 }
+unused_variables = { level = "allow", priority = 3 }

@@ -1,0 +1,132 @@
+---
+- name: Install system packages
+  hosts: fly
+  become: true
+  tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: full
+
+    - name: Install packages
+      ansible.builtin.apt:
+        name:
+          - libssl-dev
+          - pkg-config
+          - openssl
+          - build-essential
+          - zlib1g-dev
+          - libpq-dev
+          - git
+          - curl
+          - atop
+          - glances
+          - linux-tools-common
+          - linux-headers-generic
+          - sshfs
+          - direnv
+          - jq
+          - acl
+          - pq
+          - unzip
+          - ca-certificates
+          - curl
+          - gnupg
+          - apt-transport-https
+
+        state: present
+        update_cache: true
+
+    - name: Configure sysctl for performance monitoring
+      ansible.posix.sysctl:
+        name: kernel.perf_event_paranoid
+        value: -1
+        state: present
+        sysctl_file: /etc/sysctl.conf
+        reload: true
+
+    - name: Configure sysctl for kernel kptr_restrict
+      ansible.posix.sysctl:
+        name: kernel.kptr_restrict
+        value: 0
+        state: present
+        sysctl_file: /etc/sysctl.conf
+        reload: true
+
+    - name: Apply sysctl changes
+      ansible.builtin.service:
+        name: systemd-sysctl
+        state: restarted
+
+    - name: Download rustup installer
+      ansible.builtin.get_url:
+        url: https://sh.rustup.rs
+        dest: /tmp/rustup.sh
+        mode: '0755'
+
+    - name: Install Rust globally
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /tmp/rustup.sh -y
+      args:
+        creates: "/usr/local/rust/bin/rustc"
+
+    - name: Add Rust to system-wide PATH
+      ansible.builtin.copy:
+        dest: /etc/profile.d/rust.sh
+        content: |
+          export CARGO_HOME=/usr/local/rust
+          export RUSTUP_HOME=/opt/rustup
+          export PATH=$CARGO_HOME/bin:$PATH
+        mode: '0644'
+
+    - name: Install cargo-make
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install cargo-make
+      args:
+        creates: "/usr/local/rust/bin/cargo-make"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install cargo flamegraph
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install flamegraph
+      args:
+        creates: "/usr/local/rust/bin/flamegraph"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install rust-analyzer
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/rustup component add rust-analyzer
+      args:
+        creates: "/opt/rustup/toolchains/{{ rust_version }}-x86_64-unknown-linux-gnu/bin/rust-analyzer"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install specific Rust version
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/rustup default {{ rust_version }}
+      args:
+        creates: "/opt/rustup/toolchains/{{ rust_version }}-x86_64-unknown-linux-gnu"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install sccache
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install sccache
+      args:
+        creates: "/usr/local/rust/bin/sccache"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install cargo-script
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install cargo-script
+      args:
+        creates: "/usr/local/rust/bin/cargo-script"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"

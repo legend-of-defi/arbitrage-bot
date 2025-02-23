@@ -1,0 +1,14 @@
+{
+    "filter_paths": "node_modules",
+    "solc_remaps": [
+        "forge-std/=lib/forge-std/src/",
+        "ds-test/=lib/forge-std/lib/ds-test/src/"
+    ],
+    "detectors_to_exclude": [
+        "low-level-calls",
+        "naming-convention",
+        "assembly",
+        "solc-version",
+        "calls-loop"
+    ]
+}

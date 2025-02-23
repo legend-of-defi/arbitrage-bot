@@ -1,0 +1,18 @@
+[Unit]
+Description=PostgreSQL Database Server
+After=network.target
+
+[Service]
+Type=notify
+User=postgres
+Group=postgres
+Environment=PGDATA=/var/lib/postgresql/16/main
+
+ExecStart=/usr/lib/postgresql/16/bin/postgres -D ${PGDATA}
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGINT
+TimeoutSec=infinity
+
+[Install]
+WantedBy=multi-user.target
