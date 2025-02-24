@@ -4,6 +4,8 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use futures::StreamExt;
 use chrono::Local;
 
+const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+
 /// Subscribes to sync events from the network
 ///
 /// Listens for Sync events from Uniswap V2 pairs and processes reserve updates
@@ -19,8 +21,6 @@ use chrono::Local;
 /// * If received message format is invalid
 /// * If WebSocket stream terminates unexpectedly
 /// * If message sending fails
-const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
-
 pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
     let subscribe_request = json!({
         "jsonrpc": "2.0",
