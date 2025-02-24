@@ -1,7 +1,5 @@
-use crate::{
-    core::{MempoolMonitor, TradeProcessor},
-    AppContext,
-};
+use crate::core::{MempoolMonitor, TradeProcessor};
+use crate::utils::app_context::AppContext;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 

@@ -16,7 +16,7 @@ use alloy::primitives::U256;
 use super::{
     cycle::Cycle,
     pool::Pool,
-    swap::{Swap, SwapId},
+    swap_side::{SwapId, SwapSide},
     token::{Token, TokenId},
 };
 
@@ -43,7 +43,7 @@ pub struct Market {
 
     /// Swaps indexed by `SwapId`
     #[allow(dead_code)]
-    pub swap_vec: Vec<Swap>,
+    pub swap_vec: Vec<SwapSide>,
 
     /// `SwapKey` to `SwapId`
     #[allow(dead_code)]
@@ -89,22 +89,8 @@ impl Market {
         // Build swap_vec with capacity
         let mut swap_vec = Vec::with_capacity(num_swaps);
         for pool in pools {
-            swap_vec.push(Swap::new(
-                SwapId::from(format!("{}-fwd", pool.id).as_str()),
-                pool.id.clone(),
-                pool.token0.clone(),
-                pool.token1.clone(),
-                pool.reserve0,
-                pool.reserve1,
-            ));
-            swap_vec.push(Swap::new(
-                SwapId::from(format!("{}-rev", pool.id).as_str()),
-                pool.id.clone(),
-                pool.token1.clone(),
-                pool.token0.clone(),
-                pool.reserve1,
-                pool.reserve0,
-            ));
+            swap_vec.push(SwapSide::forward(pool));
+            swap_vec.push(SwapSide::reverse(pool));
         }
         swap_vec.sort(); // Sort before building graph
 
@@ -150,7 +136,7 @@ impl Market {
         }
 
         let updated_swaps = self.update_swaps(new_pools);
-        let cycles = self.find_cycles(updated_swaps);
+        let cycles = self.updated_cycles(updated_swaps);
         self.exploitable_cycles(cycles)
     }
 
@@ -159,13 +145,13 @@ impl Market {
         let mut updated_swaps = Vec::new();
 
         for pool in updated_pools {
-            let forward = Swap::forward(&pool);
+            let forward = SwapSide::forward(&pool);
             if let Some(&swap_id) = self.swap_map.get(&forward.id) {
                 self.swap_vec[swap_id] = forward;
                 updated_swaps.push(swap_id);
             }
 
-            let reverse = Swap::reverse(&pool);
+            let reverse = SwapSide::reverse(&pool);
             if let Some(&swap_id) = self.swap_map.get(&reverse.id) {
                 self.swap_vec[swap_id] = reverse;
                 updated_swaps.push(swap_id);
@@ -177,7 +163,7 @@ impl Market {
 
     /// Find cycles that include at least one updated swap and at least one of our tokens
     #[allow(dead_code)]
-    fn find_cycles(&self, updated_swaps: Vec<SwapIndex>) -> Vec<Cycle> {
+    fn updated_cycles(&self, updated_swaps: Vec<SwapIndex>) -> Vec<Cycle> {
         let mut cycles = Vec::new();
         let mut unique_cycles = HashSet::new();
         let updated_set: HashSet<_> = updated_swaps.into_iter().collect();
@@ -195,7 +181,7 @@ impl Market {
                 &mut path,
                 &mut cycles,
                 0,
-                3,
+                3, // max cycle depth
             );
         }
 
@@ -228,7 +214,7 @@ impl Market {
         // Optimize and filter exploitable cycles
         for cycle in Self::profitable_cycles(cycles) {
             let mut cycle = cycle;
-            cycle.optimize(self.balances[&cycle.swaps[0].token0]);
+            cycle.optimize(self.balances[&cycle.swap_sides[0].token0]);
 
             if cycle.is_exploitable() {
                 exploitable_cycles.push(cycle);
@@ -278,7 +264,7 @@ impl Market {
             // Skip if this swap is reciprocal of previous swap
             if let Some(&prev_id) = path.last() {
                 let prev_swap = &self.swap_vec[prev_id];
-                if swap.is_reverse(prev_swap) {
+                if swap.is_reciprocal(prev_swap) {
                     continue;
                 }
             }
@@ -308,6 +294,8 @@ mod tests {
     use super::*;
     use alloy::primitives::map::HashMap;
 
+    use crate::arb::pool::PoolId;
+    use crate::arb::swap_side::Direction;
     use crate::arb::test_helpers::*;
 
     #[test]
@@ -325,16 +313,22 @@ mod tests {
         assert_eq!(
             market.swap_vec,
             vec![
-                swap("P1-fwd", "A", "B", 100, 200),
-                swap("P1-rev", "B", "A", 200, 100),
+                swap("P1", Direction::ZeroForOne, "A", "B", 100, 200),
+                swap("P1", Direction::OneForZero, "B", "A", 200, 100),
             ]
         );
 
         assert_eq!(
             market.swap_map,
             HashMap::from([
-                (market.swap_vec[0].id.clone(), 0),
-                (market.swap_vec[1].id.clone(), 1),
+                (SwapId {
+                    pool: PoolId::from("P1"),
+                    direction: Direction::ZeroForOne,
+                }, 0),
+                (SwapId {
+                    pool: PoolId::from("P1"),
+                    direction: Direction::OneForZero,
+                }, 1),
             ])
         );
 
@@ -361,10 +355,10 @@ mod tests {
         assert_eq!(
             market.swap_vec,
             vec![
-                swap("Pool1-fwd", "A", "B", 100, 200), // 0 Forward: A->B in Pool1
-                swap("Pool2-rev", "A", "B", 100, 300), // 1 Forward: A->B in Pool2
-                swap("Pool1-rev", "B", "A", 200, 100), // 3 Reverse: B->A in Pool1
-                swap("Pool2-fwd", "B", "A", 300, 100), // 2 Reverse: B->A in Pool2
+                swap("Pool1", Direction::ZeroForOne, "A", "B", 100, 200), // 0 Forward: A->B in Pool1
+                swap("Pool2", Direction::OneForZero, "A", "B", 100, 300), // 1 Forward: A->B in Pool2
+                swap("Pool1", Direction::OneForZero, "B", "A", 200, 100), // 3 Reverse: B->A in Pool1
+                swap("Pool2", Direction::ZeroForOne, "B", "A", 300, 100), // 2 Reverse: B->A in Pool2
             ]
         );
 
@@ -407,8 +401,8 @@ mod tests {
         assert_eq!(
             market.swap_vec,
             vec![
-                swap("Pool1-fwd", "A", "B", 100, 300),
-                swap("Pool1-rev", "B", "A", 300, 100),
+                swap("Pool1", Direction::ZeroForOne, "A", "B", 100, 300),
+                swap("Pool1", Direction::OneForZero, "B", "A", 300, 100),
             ]
         );
     }
@@ -420,17 +414,17 @@ mod tests {
             &[("A", 100)],
         );
 
-        let cycles = market.find_cycles(vec![0, 1]);
+        let cycles = market.updated_cycles(vec![0, 1]);
         assert_eq!(
             cycles,
             vec![
                 cycle(&[
-                    ("Pool1-fwd", "A", "B", 100, 200),
-                    ("Pool2-fwd", "B", "A", 300, 100),
+                    ("Pool1", Direction::ZeroForOne, "A", "B", 100, 200),
+                    ("Pool2", Direction::ZeroForOne, "B", "A", 300, 100),
                 ]),
                 cycle(&[
-                    ("Pool2-rev", "A", "B", 100, 300),
-                    ("Pool1-rev", "B", "A", 200, 100),
+                    ("Pool2", Direction::OneForZero, "A", "B", 100, 300),
+                    ("Pool1", Direction::OneForZero, "B", "A", 200, 100),
                 ]),
             ]
         );
@@ -443,7 +437,7 @@ mod tests {
             &[("A", 100)],
         );
 
-        let cycles = market.find_cycles(vec![0, 1]);
+        let cycles = market.updated_cycles(vec![0, 1]);
         assert_eq!(cycles.len(), 2);
 
         let profitable_cycles = Market::profitable_cycles(cycles.clone());
@@ -464,7 +458,7 @@ mod tests {
             &[("A", 100_000)],
         );
 
-        let cycles = market.find_cycles(vec![0, 1]);
+        let cycles = market.updated_cycles(vec![0, 1]);
         let exploitable_cycles = market.exploitable_cycles(cycles);
         assert_eq!(exploitable_cycles.len(), 1);
         let cycle = &exploitable_cycles[0];
@@ -472,12 +466,12 @@ mod tests {
         assert_eq!(cycle.max_profit_margin, Some(0.222_877_893_781_207_45));
         assert_eq!(cycle.best_amount_in, Some(U256::from(8_812)));
         assert_eq!(cycle.log_rate, 176_092);
-        assert_eq!(cycle.swaps.len(), 2);
+        assert_eq!(cycle.swap_sides.len(), 2);
         assert_eq!(
-            cycle.swaps,
+            cycle.swap_sides,
             vec![
-                swap("Pool2-rev", "A", "B", 100_000, 300_000_000_000_000),
-                swap("Pool1-rev", "B", "A", 200_000_000_000_000, 100_000),
+                swap("Pool2", Direction::OneForZero, "A", "B", 100_000, 300_000_000_000_000),
+                swap("Pool1", Direction::OneForZero, "B", "A", 200_000_000_000_000, 100_000),
             ]
         );
     }

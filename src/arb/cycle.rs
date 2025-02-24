@@ -10,17 +10,25 @@ use alloy::primitives::U256;
 use eyre::{bail, Result};
 use log::{debug, error};
 
-use super::swap::Swap;
+use crate::utils::signer::Order;
+
+use super::swap_quote::SwapQuote;
+use super::swap_side::SwapSide;
 
 /// A cycle of swaps that starts and ends at the same token
 #[derive(Clone)]
 #[allow(dead_code)]
 pub struct Cycle {
     /// Sequence of swap ids forming the cycle
-    pub swaps: Vec<Swap>,
+    pub swap_sides: Vec<SwapSide>,
 
     /// The swap rate of the cycle (a product of all swap rates in the cycle)
     pub log_rate: i64,
+
+    /// The orders to be sent to the signer
+    pub orders: Option<Vec<Order>>,
+
+    pub best_swap_quotes: Option<Vec<SwapQuote>>,
 
     /// The optimal amount of tokens to input into the cycle to maximize profit
     pub best_amount_in: Option<U256>,
@@ -37,7 +45,7 @@ impl Debug for Cycle {
         write!(
             f,
             "Cycle({})",
-            self.swaps
+            self.swap_sides
                 .iter()
                 .map(|s| format!("{s:?}"))
                 .collect::<Vec<_>>()
@@ -47,7 +55,7 @@ impl Debug for Cycle {
 }
 impl PartialEq for Cycle {
     fn eq(&self, other: &Self) -> bool {
-        self.swaps == other.swaps
+        self.swap_sides == other.swap_sides
     }
 }
 
@@ -55,7 +63,7 @@ impl Eq for Cycle {}
 
 impl Hash for Cycle {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        for swap in &self.swaps {
+        for swap in &self.swap_sides {
             swap.hash(state);
         }
     }
@@ -63,11 +71,13 @@ impl Hash for Cycle {
 
 impl Cycle {
     #[allow(dead_code)]
-    pub fn new(swaps: Vec<Swap>) -> Result<Self> {
+    pub fn new(swaps: Vec<SwapSide>) -> Result<Self> {
         let log_rate = swaps.iter().map(|swap| swap.log_rate).sum();
         let cycle = Self {
-            swaps,
+            swap_sides: swaps,
             log_rate,
+            orders: None,
+            best_swap_quotes: None,
             best_amount_in: None,
             max_profit: None,
             max_profit_margin: None,
@@ -95,10 +105,11 @@ impl Cycle {
         // This should really be gas cost, but not worth optimizing
         let mut amount_in_left = U256::from(0);
 
-        let mut amount_in_right = min(self.swaps[0].reserve0, our_balance);
+        let mut amount_in_right = min(self.swap_sides[0].reserve0, our_balance);
 
         let mut best_amount_in = U256::ZERO;
         let mut best_profit = U256::ZERO;
+        let mut best_swap_quotes = None;
 
         let mut count = 0;
         // Arbitrary limit to prevent infinite loop
@@ -118,8 +129,10 @@ impl Cycle {
             );
             let amount_in_delta = amount_in + delta;
 
-            let amount_out = self.amount_out(amount_in);
-            let amount_out_delta = self.amount_out(amount_in_delta);
+            let quotes = self.quotes(amount_in);
+            let amount_out = quotes.last().unwrap().amount_out;
+            let quotes_delta = self.quotes(amount_in_delta);
+            let amount_out_delta = quotes_delta.last().unwrap().amount_out;
 
             let profit = amount_out.saturating_sub(amount_in);
             let profit_delta = amount_out_delta.saturating_sub(amount_in_delta);
@@ -136,11 +149,13 @@ impl Cycle {
             if profit > best_profit {
                 best_profit = profit;
                 best_amount_in = amount_in;
+                best_swap_quotes = Some(quotes);
             }
 
             if profit_delta > best_profit {
                 best_profit = profit_delta;
                 best_amount_in = amount_in_delta;
+                best_swap_quotes = Some(quotes_delta);
             }
         }
 
@@ -151,31 +166,32 @@ impl Cycle {
             self.max_profit = Some(best_profit);
             self.max_profit_margin =
                 Some(f64::from(best_profit) * 100.0 / f64::from(best_amount_in) / 100.0);
+            self.best_swap_quotes = best_swap_quotes;
         } else {
             debug!("Cycle has no profitable amount in");
         }
     }
 
     fn validate_swaps(&self) -> Result<()> {
-        if self.swaps.len() < 2 {
+        if self.swap_sides.len() < 2 {
             bail!("Cycle must have at least 2 swaps");
         }
 
-        for i in 0..self.swaps.len() {
+        for i in 0..self.swap_sides.len() {
             // Check for duplicates
-            if self.swaps[i] == self.swaps[(i + 1) % self.swaps.len()] {
+            if self.swap_sides[i] == self.swap_sides[(i + 1) % self.swap_sides.len()] {
                 bail!("Cycle contains duplicate swaps");
             }
 
             // Check token matching
-            let next = (i + 1) % self.swaps.len();
-            if self.swaps[i].token1 != self.swaps[next].token0 {
+            let next = (i + 1) % self.swap_sides.len();
+            if self.swap_sides[i].token1 != self.swap_sides[next].token0 {
                 bail!(
                     "Swap {} token1 ({}) does not match swap {} token0 ({})",
                     i,
-                    self.swaps[i].token1,
+                    self.swap_sides[i].token1,
                     next,
-                    self.swaps[next].token0
+                    self.swap_sides[next].token0
                 );
             }
         }
@@ -196,23 +212,32 @@ impl Cycle {
         self.best_amount_in.is_some()
     }
 
-    /// The `amount_out` we get from this cycle when we start with `amount_in`
+    /// Returns a Vec of amounts out for each swap in the cycle, including the final amount
+    /// The first element is the input amount, and each subsequent element is the output
+    /// amount from that swap
     #[allow(dead_code)]
-    fn amount_out(&self, amount_in: U256) -> U256 {
-        self.swaps
-            .iter()
-            .fold(amount_in, |amount, swap| swap.amount_out(amount))
+    fn quotes(&self, amount_in: U256) -> Vec<SwapQuote> {
+        let mut swap_quotes = Vec::with_capacity(self.swap_sides.len() + 1);
+
+        self.swap_sides.iter().fold(amount_in, |amount, swap_side| {
+            let swap_quote = SwapQuote::new(swap_side, amount);
+            swap_quotes.push(swap_quote.clone());
+            swap_quote.amount_out
+        });
+
+        swap_quotes
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::arb::swap_side::Direction;
     use crate::arb::test_helpers::*;
 
     #[test]
     fn test_new_invalid_length() {
-        let swaps = vec![swap("P1", "A", "B", 100, 200)];
+        let swaps = vec![swap("P1", Direction::ZeroForOne, "A", "B", 100, 200)];
         let cycle = Cycle::new(swaps);
         assert_eq!(
             cycle.err().unwrap().to_string(),
@@ -223,8 +248,8 @@ mod tests {
     #[test]
     fn test_new_invalid_duplicate_swaps() {
         let swaps = vec![
-            swap("P1", "A", "B", 100, 200),
-            swap("P1", "A", "B", 200, 100),
+            swap("P1", Direction::ZeroForOne, "A", "B", 100, 200),
+            swap("P1", Direction::ZeroForOne, "A", "B", 200, 100),
         ];
         let cycle = Cycle::new(swaps);
         assert_eq!(
@@ -236,8 +261,8 @@ mod tests {
     #[test]
     fn test_new_invalid_token_mismatch() {
         let swaps = vec![
-            swap("P1", "A", "B", 100, 200),
-            swap("P1", "C", "B", 200, 100),
+            swap("P1", Direction::ZeroForOne, "A", "B", 100, 200),
+            swap("P1", Direction::ZeroForOne, "C", "B", 200, 100),
         ];
         let cycle = Cycle::new(swaps);
         assert_eq!(
@@ -248,9 +273,9 @@ mod tests {
     #[test]
 
     fn test_log_rate() {
-        let swap1 = swap("P1", "A", "B", 100, 200);
+        let swap1 = swap("P1", Direction::ZeroForOne, "A", "B", 100, 200);
         assert_eq!(swap1.log_rate, 301_029);
-        let swap2 = swap("P2", "B", "A", 300, 100);
+        let swap2 = swap("P2", Direction::ZeroForOne, "B", "A", 300, 100);
         assert_eq!(swap2.log_rate, -477_121);
 
         let cycle = Cycle::new(vec![swap1, swap2]).unwrap();
@@ -260,143 +285,125 @@ mod tests {
     #[test]
     fn test_amount_out_not_exploitable() {
         let cycle = cycle(&[
-            ("P1", "A", "B", 100, 200), // 2 rate
-            ("P2", "B", "A", 300, 100), // 1/3 rate
+            ("P1", Direction::ZeroForOne, "A", "B", 100, 200), // 2 rate
+            ("P2", Direction::ZeroForOne, "B", "A", 300, 100), // 1/3 rate
         ]);
-        for (amount_in, expected_amount_out) in &[
-            //in, out, loss
-            (10, 5),  // -5
-            (20, 9),  // -11
-            (30, 13), // -17
-            (40, 15), // -25
-            (50, 17), // -33
-            (60, 19), // -41
-            (70, 21), // -49
+        for (amount_in, intermediate_amount_out, final_amount_out) in &[
+            //in0, out0/in1, out1, loss
+            (10, 18, 5),  // -5
+            (20, 33, 9),  // -11
+            (30, 46, 13), // -17
+            (40, 57, 15), // -25
+            (50, 66, 17), // -33
+            (60, 74, 19), // -41
+            (70, 82, 21), // -49
         ] {
-            assert_eq!(
-                cycle.amount_out(U256::from(*amount_in)),
-                U256::from(*expected_amount_out)
-            );
+            let quotes = cycle.quotes(U256::from(*amount_in));
+            assert_eq!(quotes.len(), 2);
+            assert_eq!(quotes[0].amount_in, U256::from(*amount_in));
+            assert_eq!(quotes[0].amount_out, U256::from(*intermediate_amount_out));
+            assert_eq!(quotes[1].amount_in, U256::from(*intermediate_amount_out));
+            assert_eq!(quotes[1].amount_out, U256::from(*final_amount_out));
         }
     }
 
     #[test]
     fn test_amount_out_exploitable() {
         let cycle = cycle(&[
-            ("P1", "A", "B", 100, 200), // 2 rate
-            ("P2", "B", "A", 300, 300), // 1 rate
+            ("P1", Direction::ZeroForOne, "A", "B", 100, 200), // 2 rate
+            ("P2", Direction::ZeroForOne, "B", "A", 300, 300), // 1 rate
         ]);
 
-        for (amount_in, expected_amount_out) in &[
-            //in, out,  profit
-            (10, 16), // +6
-            (20, 29), // +9 \
-            (25, 34), // +9 . best amount in is here
-            (30, 39), // +9 /
-            (40, 47), // +7
-            (50, 53), // +3
-            (60, 59), // -1
-            (70, 64), // +6
+        for (amount_in, intermediate_amount_out, final_amount_out) in &[
+            //in0, out0/in1, out1, profit
+            (10, 18, 16), // +6
+            (20, 33, 29), // +9 \
+            (25, 39, 34), // +9 . best amount in is here
+            (30, 46, 39), // +9 /
+            (40, 57, 47), // +7
+            (50, 66, 53), // +3
+            (60, 74, 59), // -1
+            (70, 82, 64), // +6
         ] {
-            assert_eq!(
-                cycle.amount_out(U256::from(*amount_in)),
-                U256::from(*expected_amount_out)
-            );
+            let quotes = cycle.quotes(U256::from(*amount_in));
+            assert_eq!(quotes.len(), 2);
+            assert_eq!(quotes[0].amount_in, U256::from(*amount_in));
+            assert_eq!(quotes[0].amount_out, U256::from(*intermediate_amount_out));
+            assert_eq!(quotes[1].amount_in, U256::from(*intermediate_amount_out));
+            assert_eq!(quotes[1].amount_out, U256::from(*final_amount_out));
         }
     }
 
     #[test]
     fn test_optimize_not_exploitable() {
         let mut cycle = cycle(&[
-            ("P1", "A", "B", 100, 200), // 2 rate
-            ("P2", "B", "A", 300, 100), // 1/3 rate
+            ("P1", Direction::ZeroForOne, "A", "B", 100, 200), // 2 rate
+            ("P2", Direction::ZeroForOne, "B", "A", 300, 100), // 1/3 rate
         ]);
         let our_balance = U256::from(100);
         cycle.optimize(our_balance);
 
         assert_eq!(cycle.best_amount_in, None);
         assert_eq!(cycle.max_profit, None);
+        assert!(cycle.best_swap_quotes.is_none());
     }
 
     #[test]
     fn test_optimize_exploitable() {
         let mut cycle = cycle(&[
-            ("P1", "A", "B", 1_000_000, 2_000_000), // 2 rate
-            ("P2", "B", "A", 3_000_000, 3_000_000), // 1 rate
+            ("P1", Direction::ZeroForOne, "A", "B", 1_000_000, 2_000_000), // 2 rate
+            ("P2", Direction::ZeroForOne, "B", "A", 3_000_000, 3_000_000), // 1 rate
         ]);
 
-        for (our_balance, expected_optimal_amount_in, expected_profit) in &[
-            // our balance, optimal amount in, profit
-            (50_000, 50_000, 41_783),
-            (100_000, 100_000, 70_503),
-            (200_000, 200_000, 98_515),
-            (300_000, 247_093, 101_270),
-            (400_000, 246_875, 101_270),
-            (500_000, 247_093, 101_270),
-            (600_000, 247_093, 101_270),
-            // somewhere between 247_093 is all we need in this case
+        for (balance, amount_in, mid_amount, amount_out, profit) in &[
+            (50_000, 50_000, 94_965, 91_783, 41_783),
+            (100_000, 100_000, 181_322, 170_503, 70_503),
+            (200_000, 200_000, 332_499, 298_515, 98_515),
+            (300_000, 247_093, 395_316, 348_363, 101_270),
+            (400_000, 246_875, 395_036, 348_145, 101_270),
+            (500_000, 247_093, 395_316, 348_363, 101_270),
+            (600_000, 247_093, 395_316, 348_363, 101_270),
+            // 247_093 is all we need in this case
         ] {
-            dbg!(our_balance, expected_optimal_amount_in, expected_profit);
-            assert!(expected_optimal_amount_in <= our_balance);
-            cycle.optimize(U256::from(*our_balance));
+            assert!(amount_in <= balance);
+            cycle.optimize(U256::from(*balance));
+
+            assert!(cycle.clone().best_swap_quotes.is_some());
+            let quotes = cycle.clone().best_swap_quotes.unwrap();
+            assert_eq!(quotes.len(), 2);
+
+            assert_eq!(quotes[0].amount_in, U256::from(*amount_in));
+            assert_eq!(quotes[0].amount_out, U256::from(*mid_amount));
+            assert_eq!(quotes[1].amount_in, U256::from(*mid_amount));
+            assert_eq!(quotes[1].amount_out, U256::from(*amount_out));
 
             assert_eq!(
                 cycle.best_amount_in,
-                Some(U256::from(*expected_optimal_amount_in))
+                Some(U256::from(*amount_in))
             );
-            assert_eq!(cycle.max_profit, Some(U256::from(*expected_profit)));
+            assert_eq!(cycle.clone().max_profit, Some(U256::from(*profit)));
         }
     }
 
     #[test]
     fn test_optimize_with_wild_exchange_rate() {
         let mut cycle = cycle(&[
-            ("P1", "A", "B", 1_000_000, 2_000_000_000_000_000_000), // 2 rate
-            ("P2", "B", "A", 2_000_000_000_000_000_000, 2_000_000), // 1 rate
+            ("P1", Direction::ZeroForOne, "A", "B", 1_000_000, 2_000_000_000_000_000_000), // 2 rate
+            ("P2", Direction::ZeroForOne, "B", "A", 2_000_000_000_000_000_000, 2_000_000), // 1 rate
         ]);
         let our_balance = U256::from(100_000);
         cycle.optimize(our_balance);
 
+        assert!(cycle.best_swap_quotes.is_some());
+        let quotes = cycle.best_swap_quotes.unwrap();
+        assert_eq!(quotes.len(), 2);
+        assert_eq!(quotes[0].amount_in, U256::from(100_000));
+        assert_eq!(quotes[0].amount_out, U256::from(181_322_178_776_029_826_u64));
+        assert_eq!(quotes[1].amount_in, U256::from(181_322_178_776_029_826_u64));
+        assert_eq!(quotes[1].amount_out, U256::from(165_792));
+
         assert_eq!(cycle.best_amount_in, Some(U256::from(100_000)));
         assert_eq!(cycle.max_profit, Some(U256::from(65_792)));
         assert_eq!(cycle.max_profit_margin, Some(0.657_920_000_000_000_1));
-    }
-
-    #[test]
-    fn test_slippage_vs_size() {
-        // Set up pools with equal reserves
-        let reserve_size = 1_000_000;
-        let base_amount = 1_000;
-
-        println!("\nSlippage analysis:");
-        println!("Swap size (% of reserves) | Slippage %");
-        println!("-----------------------------------------");
-
-        for multiplier in [1, 5, 10, 20, 30, 40, 50] {
-            let amount_in = base_amount * multiplier;
-            let percent_of_reserves = (amount_in as f64 / reserve_size as f64) * 100.0;
-
-            let cycle = cycle(&[
-                ("P1", "A", "B", reserve_size, reserve_size),
-                ("P2", "B", "A", reserve_size, reserve_size),
-            ]);
-
-            // Calculate expected amount without slippage (using spot price)
-            let spot_price = 1.0; // Since reserves are equal
-            let expected_without_slippage = amount_in as f64 * spot_price;
-
-            // Get actual amount out
-            let actual_amount_out = cycle.amount_out(U256::from(amount_in));
-
-            // Calculate slippage percentage
-            let slippage_percent = ((expected_without_slippage
-                - actual_amount_out.to::<u64>() as f64)
-                / expected_without_slippage)
-                * 100.0;
-
-            println!(
-                "{percent_of_reserves:>20.2}% | {slippage_percent:>10.2}%"
-            );
-        }
     }
 }

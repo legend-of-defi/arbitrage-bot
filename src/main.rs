@@ -12,6 +12,7 @@ use crate::utils::logger::setup_logger;
 use crate::utils::providers::create_http_provider;
 use alloy::primitives::address;
 use clap::{Parser, Subcommand};
+use fly::sync::subscriber::subscribe_to_sync;
 
 mod bootstrap;
 mod bot;
@@ -77,6 +78,8 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
     // }
 
     let all_reserves = read_all_reserves(3000).await;
+
+    subscribe_to_sync().await?;
 
     let bot = Arc::new(Bot::new(context));
     start_bot(bot).await;

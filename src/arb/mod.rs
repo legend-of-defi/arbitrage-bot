@@ -1,11 +1,11 @@
 mod cycle;
 mod market;
 mod pool;
-mod swap;
+mod swap_side;
 mod test_helpers;
 mod token;
 mod types;
-
+mod swap_quote;
 // Maps each token to a list of possible swaps from that token
 // #[allow(dead_code)]
 // type AdjacencyList = HashMap<TokenAddress, Vec<Swap>>;

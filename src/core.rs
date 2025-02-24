@@ -1,10 +1,8 @@
-use alloy::primitives::{address, U256};
-use serde_json::Value;
+pub use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
-use crate::utils::signer::Order;
-use crate::AppContext;
+use crate::utils::app_context::AppContext;
 
 const TRADE_CHANNEL_SIZE: usize = 1000; // Adjust size as needed
 
@@ -64,31 +62,10 @@ impl MempoolMonitor {
 
     /// I image main bot loop to look something like this:
     #[allow(dead_code)]
-    async fn bot_loop(&self, context: &mut AppContext) {
+    async fn bot_loop(&self, _context: &mut AppContext) {
         loop {
-            // tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-            // Complicated logic that generates a bunch of transactions we want to send
-            // This Message is just a placeholder. We'll need to come up with an actual interface
-            let order = Order {
-                amount: U256::from(1000),
-                pools: vec![
-                    address!("0x0000000000000000000000000000000000000000"),
-                    address!("0x0000000000000000000000000000000000000001"),
-                    address!("0x0000000000000000000000000000000000000002"),
-                ],
-            };
-
-            println!("Posting order: {order:?}");
-            match context.signer.call(&order).await {
-                Ok(()) => {
-                    println!("Sent order: {order:?}");
-                    break;
-                }
-                Err(e) => {
-                    eprintln!("Failed to send order: {e}");
-                }
-            }
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            println!("Bot is working...");
         }
     }
 }

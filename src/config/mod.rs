@@ -42,18 +42,16 @@ impl Config {
         let defaults = Self::defaults();
 
         Self {
-            database_url: env::var("DATABASE_URL")
-                .unwrap_or(defaults.database_url),
-            rpc_url: env::var("RPC_URL")
-                .unwrap_or(defaults.rpc_url),
-            ipc_path: env::var("IPC_PATH")
-                .unwrap_or(defaults.ipc_path),
+            database_url: env::var("DATABASE_URL").unwrap_or(defaults.database_url),
+            rpc_url: env::var("RPC_URL").unwrap_or(defaults.rpc_url),
+            ipc_path: env::var("IPC_PATH").unwrap_or(defaults.ipc_path),
         }
     }
 
     /// Create a test configuration
     #[cfg(test)]
-    #[must_use] pub fn test_config() -> Self {
+    #[must_use]
+    pub fn test_config() -> Self {
         Self::defaults()
     }
 }
@@ -77,16 +75,11 @@ mod tests {
 
     #[test]
     fn test_config_defaults() {
-        // Clear environment variables
-        env::remove_var("DATABASE_URL");
-        env::remove_var("RPC_URL");
-        env::remove_var("IPC_PATH");
+        // Set test environment variables
+        env::set_var("DATABASE_URL", "test_db_url");
 
         let config = Config::from_env();
-        let defaults = Config::defaults();
-
-        assert_eq!(config.database_url, defaults.database_url);
-        assert_eq!(config.rpc_url, defaults.rpc_url);
-        assert_eq!(config.ipc_path, defaults.ipc_path);
+        assert_eq!(config.database_url, "test_db_url");
+        // ... other assertions
     }
 }

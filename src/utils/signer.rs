@@ -16,10 +16,10 @@ use tokio::net::UnixStream;
 /// where `IFlySwapper` is an interface to our smart contract
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Order {
-    /// The amount to swap in wei
-    pub amount: U256,
     /// The pools to swap through. The order of the pools is important, of course.
-    pub pools: Vec<Address>,
+    pub pool: Address,
+    pub amount: U256,
+    pub is_token0: bool,
 }
 
 pub struct Signer {
