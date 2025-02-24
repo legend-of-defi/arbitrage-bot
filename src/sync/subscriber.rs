@@ -12,7 +12,7 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
         "id": 1
     });
 
-    let mut ws_stream = crate::websocket::ws_client::send_ws_request(subscribe_request.to_string()).await?;
+    let mut ws_stream = crate::utils::providers::send_ws_request(subscribe_request.to_string()).await?;
 
     // Sync event topic
     const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
