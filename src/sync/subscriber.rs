@@ -4,17 +4,6 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use futures::StreamExt;
 use chrono::Local;
 
-/// Subscribes to sync events from the network
-///
-/// # Returns
-/// Empty result indicating successful subscription
-///
-/// # Errors
-/// * If WebSocket connection fails
-/// * If subscription request fails
-/// * If message parsing fails
-const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
-
 pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
     let subscribe_request = json!({
         "jsonrpc": "2.0",
@@ -23,7 +12,10 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
         "id": 1
     });
 
-    let mut ws_stream = crate::utils::providers::send_ws_request(subscribe_request.to_string()).await?;
+    let mut ws_stream = crate::websocket::ws_client::send_ws_request(subscribe_request.to_string()).await?;
+
+    // Sync event topic
+    const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
 
     while let Some(msg) = ws_stream.next().await {
         match msg {
@@ -37,19 +29,19 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
                                     // Only process if it matches our sync topic
                                     if first_topic.as_str() == Some(SYNC_TOPIC) {
                                         let now = Local::now();
-                                        
+
                                         println!("\n🔄 Sync Event Detected:");
                                         println!("------------------------");
                                         println!("⏰ Time: {}", now.format("%Y-%m-%d %H:%M:%S%.3f"));
 
                                         if let Some(tx_hash) = result.get("transactionHash") {
-                                            println!("📝 Transaction: {}", tx_hash);
+                                            println!("📝 Transaction: {tx_hash}");
                                         }
 
                                         if let Some(address) = result.get("address") {
-                                            println!("📍 Pool Address: {}", address);
+                                            println!("📍 Pool Address: {address}");
                                         }
-                                        
+
                                         // Decode the reserve data
                                         if let Some(data) = result.get("data").and_then(|d| d.as_str()) {
                                             let data = data.trim_start_matches("0x");
@@ -58,14 +50,14 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
                                                     .unwrap_or_default();
                                                 let reserve1 = u128::from_str_radix(&data[64..128], 16)
                                                     .unwrap_or_default();
-                                                
-                                                    println!("💰 Reserve0: {}", reserve0);
-                                                    println!("💰 Reserve1: {}", reserve1);
+
+                                                println!("💰 Reserve0: {reserve0}");
+                                                println!("💰 Reserve1: {reserve1}");
                                             }
                                         }
-                                        
+
                                         if let Some(block_number) = result.get("blockNumber") {
-                                            println!("🔢 Block: {}", block_number);
+                                            println!("🔢 Block: {block_number}");
                                         }
                                         println!("------------------------\n");
                                     }
