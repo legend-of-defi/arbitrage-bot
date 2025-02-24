@@ -4,6 +4,17 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use futures::StreamExt;
 use chrono::Local;
 
+/// Subscribes to sync events from the network
+///
+/// # Returns
+/// Empty result indicating successful subscription
+///
+/// # Errors
+/// * If WebSocket connection fails
+/// * If subscription request fails
+/// * If message parsing fails
+const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+
 pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
     let subscribe_request = json!({
         "jsonrpc": "2.0",
@@ -13,9 +24,6 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
     });
 
     let mut ws_stream = crate::utils::providers::send_ws_request(subscribe_request.to_string()).await?;
-
-    // Sync event topic
-    const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
 
     while let Some(msg) = ws_stream.next().await {
         match msg {

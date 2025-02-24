@@ -68,8 +68,20 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, WebSocket
 use tokio::net::TcpStream;
 use std::error::Error as StdError;
 
+/// Sends a WebSocket request to the specified endpoint
+///
+/// # Arguments
+/// * `request` - The request string to send
+///
+/// # Returns
+/// A WebSocket stream connection
+///
+/// # Errors
+/// * If WebSocket connection fails
+/// * If TLS handshake fails
+/// * If connection URL is invalid
 pub async fn send_ws_request(request: String)
-                             -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn StdError>> {
+    -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn StdError>> {
     // Connect to WebSocket
     let (mut ws_stream, _) = connect_async("ws://65.108.127.254:8546").await?;
     // Send the request

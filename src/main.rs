@@ -57,7 +57,7 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Database connected successfully!");
 
-    let mut context = AppContext::new().await.expect("Failed to create context");
+    let context = AppContext::new().await.expect("Failed to create context");
 
     // Display all pairs with token information
     // let pairs = PairService::read_all_pairs(&mut context.conn);
