@@ -40,7 +40,7 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
 
                                         println!("\n🔄 Sync Event Detected:");
                                         println!("------------------------");
-                                        println!("⏰ Time: {now.format("%Y-%m-%d %H:%M:%S%.3f")}");
+                                        println!("⏰ Time: {}", now.format("%Y-%m-%d %H:%M:%S%.3f"));
 
                                         if let Some(tx_hash) = result.get("transactionHash") {
                                             println!("📝 Transaction: {tx_hash}");
