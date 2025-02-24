@@ -4,6 +4,17 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use futures::StreamExt;
 use chrono::Local;
 
+/// Subscribes to sync events from the network
+///
+/// # Returns
+/// Empty result indicating successful subscription
+///
+/// # Errors
+/// * If WebSocket connection fails
+/// * If subscription request fails
+/// * If message parsing fails
+const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+
 pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
     let subscribe_request = json!({
         "jsonrpc": "2.0",
@@ -13,9 +24,6 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
     });
 
     let mut ws_stream = crate::utils::providers::send_ws_request(subscribe_request.to_string()).await?;
-
-    // Sync event topic
-    const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
 
     while let Some(msg) = ws_stream.next().await {
         match msg {
@@ -32,7 +40,7 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
 
                                         println!("\n🔄 Sync Event Detected:");
                                         println!("------------------------");
-                                        println!("⏰ Time: {}", now.format("%Y-%m-%d %H:%M:%S%.3f"));
+                                        println!("⏰ Time: {now.format("%Y-%m-%d %H:%M:%S%.3f")}");
 
                                         if let Some(tx_hash) = result.get("transactionHash") {
                                             println!("📝 Transaction: {tx_hash}");
@@ -51,8 +59,8 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
                                                 let reserve1 = u128::from_str_radix(&data[64..128], 16)
                                                     .unwrap_or_default();
 
-                                                println!("💰 Reserve0: {reserve0}");
-                                                println!("💰 Reserve1: {reserve1}");
+                                                    println!("💰 Reserve0: {reserve0}");
+                                                    println!("💰 Reserve1: {reserve1}");
                                             }
                                         }
 
@@ -68,7 +76,7 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
                 }
             }
             Err(e) => {
-                eprintln!("Error receiving message: {:?}", e);
+                eprintln!("Error receiving message: {e:?}");
                 break;
             }
             _ => {}
