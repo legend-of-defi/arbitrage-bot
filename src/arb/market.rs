@@ -80,8 +80,8 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
             pools.insert(
                 Pool::new(
                     PoolId(pair.address),
-                    TokenId::from(token0.address),
-                    TokenId::from(token1.address),
+                    TokenId::from(token0.address.parse().into()),
+                    TokenId::from(token0.address.parse().into()),
                     reserve.reserve0,
                     reserve.reserve1
                 )
