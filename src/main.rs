@@ -79,9 +79,9 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
         if let Some((pair, token0, token1)) = PairService::read_pair_with_tokens(&mut context.conn, pair_id) {
             pools.insert(
                 Pool::new(
-                    PoolId::from(pair.address.parse().into()),
-                    TokenId::from(token0.address.parse().into()),
-                    TokenId::from(token0.address.parse().into()),
+                    PoolId::from(&*pair.address),
+                    TokenId::from(&*token0.address),
+                    TokenId::from(&*token0.address),
                     reserve.reserve0,
                     reserve.reserve1
                 )
