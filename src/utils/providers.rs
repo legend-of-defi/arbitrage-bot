@@ -81,9 +81,10 @@ use std::error::Error as StdError;
 /// * If TLS handshake fails
 /// * If connection URL is invalid
 pub async fn send_ws_request(request: String)
-    -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Box<dyn StdError>> {
+                             -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, eyre::Report> {
+    let websocket_url = std::env::var("WEBSOCKET_URL").expect("WEBSOCKET_URL not set");
     // Connect to WebSocket
-    let (mut ws_stream, _) = connect_async("ws://65.108.127.254:8546").await?;
+    let (mut ws_stream, _) = connect_async(websocket_url).await?;
     // Send the request
     ws_stream.send(Message::Text(request)).await?;
     // Return the stream for continued use
