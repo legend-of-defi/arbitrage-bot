@@ -79,9 +79,9 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
         if let Some((pair, token0, token1)) = PairService::read_pair_with_tokens(&mut context.conn, pair_id) {
             pools.insert(
                 Pool::new(
-                    PoolId(pair.address),
-                    TokenId(token0.address),
-                    TokenId(token1.address),
+                    PoolId::from(pair.address.parse().into()),
+                    TokenId::from(token0.address.parse().into()),
+                    TokenId::from(token0.address.parse().into()),
                     reserve.reserve0,
                     reserve.reserve1
                 )
@@ -90,8 +90,8 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Tether Address on base (we can update it later)
-    balances.insert(TokenId("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2".parse().unwrap()), U256::from(0));
-    Market::new(&pools, balances);
+    balances.insert(TokenId::from("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2".parse().unwrap()), U256::from(0));
+    let _market = Market::new(&pools, balances);
 
     subscribe_to_sync().await?;
 
