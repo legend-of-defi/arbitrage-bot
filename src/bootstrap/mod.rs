@@ -10,6 +10,7 @@ use std::str::FromStr;
 use crate::bootstrap::types::{PairInfo, Reserves};
 use crate::db_service::{DbManager, PairService};
 use crate::models::factory::NewFactory;
+use crate::models::pair::Pair;
 use crate::models::token::NewToken;
 use crate::utils::app_context::AppContext;
 use crate::utils::providers::create_http_provider;
@@ -123,18 +124,19 @@ pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), 
         };
 
         for pair in pairs {
-            let token0 = NewToken {
-                address: pair.token0.address.to_string(),
-                symbol: pair.token0.symbol,
-                name: pair.token0.name,
-                decimals: pair.token0.decimals,
-            };
-            let token1 = NewToken {
-                address: pair.token1.address.to_string(),
-                symbol: pair.token1.symbol,
-                name: pair.token1.name,
-                decimals: pair.token1.decimals,
-            };
+            let token0 = NewToken::new(
+                pair.token0.address.to_string(),
+                pair.token0.symbol,
+                pair.token0.name,
+                pair.token0.decimals,
+            );
+
+            let token1 = NewToken::new(
+                pair.token1.address.to_string(),
+                pair.token1.symbol,
+                pair.token1.name,
+                pair.token1.decimals,
+            );
             dex_infos.push((
                 uniswap_factory.clone(),
                 token0,
@@ -200,7 +202,7 @@ pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
 /// * If contract calls fail
 /// * If pair addresses cannot be parsed
 #[allow(dead_code)]
-pub async fn read_all_reserves(batch_size: usize) -> Vec<(String, Reserves)> {
+pub async fn read_all_reserves(batch_size: usize) -> Vec<(i32, Reserves)> {
     let mut context = AppContext::new().await.expect("app context");
     let pairs = PairService::read_all_pairs(&mut context.conn);
     let mut all_reserves = Vec::with_capacity(pairs.len());
@@ -217,7 +219,7 @@ pub async fn read_all_reserves(batch_size: usize) -> Vec<(String, Reserves)> {
 
         // Add results to all_reserves
         for (pair, reserve) in chunk.iter().zip(reserves) {
-            all_reserves.push((pair.address.clone(), reserve));
+            all_reserves.push((pair.id.clone(), reserve));
         }
 
         // Add delay between batches

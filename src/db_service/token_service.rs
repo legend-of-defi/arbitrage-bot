@@ -29,12 +29,12 @@ impl TokenService {
         name: Option<&str>,
         decimals: i32,
     ) -> Token {
-        let new_token = NewToken {
-            address: address.to_string(),
-            symbol: symbol.map(ToString::to_string),
-            name: name.map(ToString::to_string),
+        let new_token = NewToken::new(
+            address.to_string(),
+            symbol.map(ToString::to_string),
+            name.map(ToString::to_string),
             decimals,
-        };
+        );
 
         diesel::insert_into(tokens::table)
             .values(&new_token)
@@ -175,12 +175,12 @@ impl TokenService {
             }
             Ok(token)
         } else {
-            let new_token = NewToken {
-                address: address.to_string(),
-                symbol: symbol.map(ToString::to_string),
-                name: name.map(ToString::to_string),
+            let new_token = NewToken::new(
+                address.to_string(),
+                symbol.map(ToString::to_string),
+                name.map(ToString::to_string),
                 decimals,
-            };
+            );
             diesel::insert_into(tokens::table)
                 .values(&new_token)
                 .returning(Token::as_returning())

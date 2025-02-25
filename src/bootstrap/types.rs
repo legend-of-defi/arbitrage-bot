@@ -21,19 +21,19 @@ pub struct PairInfo {
 
 impl From<UniswapQuery::PairInfo> for PairInfo {
     fn from(pair: UniswapQuery::PairInfo) -> Self {
-        let token0 = NewToken {
-            address: pair.token0.tokenAddress.to_string(),
-            symbol: Some(pair.token0.symbol),
-            name: Some(pair.token0.name),
-            decimals: i32::from(pair.token0.decimals),
-        };
+        let token0 = NewToken::new(
+            pair.token0.tokenAddress.to_string(),
+            Some(pair.token0.symbol),
+            Some(pair.token0.name),
+            i32::from(pair.token0.decimals),
+        );
 
-        let token1 = NewToken {
-            address: pair.token1.tokenAddress.to_string(),
-            symbol: Some(pair.token1.symbol),
-            name: Some(pair.token1.name),
-            decimals: i32::from(pair.token1.decimals),
-        };
+        let token1 = NewToken::new(
+            pair.token1.tokenAddress.to_string(),
+            Some(pair.token1.symbol),
+            Some(pair.token1.name),
+            i32::from(pair.token1.decimals),
+        );
 
         Self {
             address: pair.pairAddress.to_string(),

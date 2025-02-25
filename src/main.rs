@@ -1,4 +1,6 @@
 #![allow(dead_code, unused_variables)]
+
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::sync::Arc;
 
@@ -10,10 +12,14 @@ use crate::utils::app_context::AppContext;
 use crate::utils::db_connect::establish_connection;
 use crate::utils::logger::setup_logger;
 use crate::utils::providers::create_http_provider;
-use alloy::primitives::address;
+use crate::arb::market::Market;
+use alloy::primitives::{address, U256};
 use clap::{Parser, Subcommand};
 use fly::sync::subscriber::subscribe_to_sync;
+use crate::arb::pool::{Pool, PoolId};
+use crate::arb::token::TokenId;
 
+mod arb;
 mod bootstrap;
 mod bot;
 mod config;
@@ -37,11 +43,13 @@ enum Commands {
 }
 
 async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
+    let _config = Config::from_env();
     setup_logger().expect("Failed to set up logger");
     println!(
         "Server Started with DATABASE_URL: {}",
         env::var("DATABASE_URL").unwrap());
 
+    let _provider = create_http_provider().await?;
     let _ =
         read_all_pairs_v2(address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"), 3000).await;
 
@@ -55,27 +63,35 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Database connected successfully!");
 
-    let context = AppContext::new().await.expect("Failed to create context");
+    let mut context = AppContext::new().await.expect("Failed to create context");
 
     // Display all pairs with token information
     // let pairs = PairService::read_all_pairs(&mut context.conn);
 
     // println!("\nFound {} pairs", pairs.len());
-    //
-    // for pair in pairs {
-    //     if let Some((pair, token0, token1)) = PairService::read_pair_with_tokens(&mut context.conn, pair.id) {
-    //         println!(
-    //             "Pair: {} - Token0: {} ({}), Token1: {} ({})",
-    //             pair.address,
-    //             token0.symbol.unwrap_or_else(|| "Unknown".to_string()),
-    //             token0.address,
-    //             token1.symbol.unwrap_or_else(|| "Unknown".to_string()),
-    //             token1.address,
-    //         );
-    //     }
-    // }
-
     let all_reserves = read_all_reserves(3000).await;
+
+    let num_pairs = all_reserves.len();
+    let mut pools = HashSet::with_capacity(num_pairs);
+    let mut balances = HashMap::with_capacity(num_pairs);
+
+    for (pair_id, reserve) in all_reserves {
+        if let Some((pair, token0, token1)) = PairService::read_pair_with_tokens(&mut context.conn, pair_id) {
+            pools.insert(
+                Pool::new(
+                    PoolId(pair.address),
+                    TokenId(token0.address),
+                    TokenId(token1.address),
+                    reserve.reserve0,
+                    reserve.reserve1
+                )
+            );
+        }
+    }
+
+    // Tether Address on base (we can update it later)
+    balances.insert(TokenId("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2".parse().unwrap()), U256::from(0));
+    Market::new(&pools, balances).await?;
 
     subscribe_to_sync().await?;
 
