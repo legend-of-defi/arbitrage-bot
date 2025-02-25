@@ -7,7 +7,7 @@ use alloy::providers::fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasF
 use alloy::providers::{Identity, IpcConnect, RootProvider};
 use alloy::rpc::client::RpcClient;
 use crate::config::Config;
-use eyre::{Error, Result};
+use eyre::{Error, Result, Report};
 
 /// Creates a new IPC provider for Ethereum network communication
 ///
@@ -66,7 +66,6 @@ pub fn create_rpc_provider() -> Result<RpcClient, Error> {
 use futures::SinkExt;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, WebSocketStream, MaybeTlsStream};
 use tokio::net::TcpStream;
-use std::error::Error as StdError;
 
 /// Sends a WebSocket request to the specified endpoint
 ///
@@ -80,8 +79,12 @@ use std::error::Error as StdError;
 /// * If WebSocket connection fails
 /// * If TLS handshake fails
 /// * If connection URL is invalid
+/// * If message sending fails
+///
+/// # Panics
+/// * If WEBSOCKET_URL environment variable is not set
 pub async fn send_ws_request(request: String)
-                             -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, eyre::Report> {
+    -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Report> {
     let websocket_url = std::env::var("WEBSOCKET_URL").expect("WEBSOCKET_URL not set");
     // Connect to WebSocket
     let (mut ws_stream, _) = connect_async(websocket_url).await?;
