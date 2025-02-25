@@ -90,7 +90,7 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Tether Address on base (we can update it later)
-    balances.insert(TokenId::from("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2".parse().unwrap()), U256::from(0));
+    balances.insert(TokenId::from("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2".parse().into()), U256::from(0));
     let _market = Market::new(&pools, balances);
 
     subscribe_to_sync().await?;
