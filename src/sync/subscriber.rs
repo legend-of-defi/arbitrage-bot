@@ -47,28 +47,16 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
         };
 
         // Get params or continue
-        let params = match json.get("params") {
-            Some(params) => params,
-            None => continue,
-        };
+        let Some(params) = json.get("params") else { continue };
 
         // Get result or continue
-        let result = match params.get("result") {
-            Some(result) => result,
-            None => continue,
-        };
+        let Some(result) = params.get("result") else { continue };
 
         // Get topics or continue
-        let topics = match result.get("topics") {
-            Some(topics) => topics,
-            None => continue,
-        };
+        let Some(topics) = result.get("topics") else { continue };
 
         // Get first topic or continue
-        let first_topic = match topics.as_array().and_then(|t| t.first()) {
-            Some(topic) => topic,
-            None => continue,
-        };
+        let Some(first_topic) = topics.as_array().and_then(|t| t.first()) else { continue };
 
         // Check if it matches our sync topic
         if first_topic.as_str() != Some(SYNC_TOPIC) {

@@ -82,7 +82,7 @@ use tokio::net::TcpStream;
 /// * If message sending fails
 ///
 /// # Panics
-/// * If WEBSOCKET_URL environment variable is not set
+/// * If `WEBSOCKET_URL` environment variable is not set
 pub async fn send_ws_request(request: String)
     -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Report> {
     let websocket_url = std::env::var("WEBSOCKET_URL").expect("WEBSOCKET_URL not set");
