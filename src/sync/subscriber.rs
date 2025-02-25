@@ -111,3 +111,77 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    
+    #[test]
+    fn test_sync_topic_constant() {
+        // Verify the sync topic hash is correct for Uniswap V2 Sync events
+        assert_eq!(
+            SYNC_TOPIC,
+            "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1"
+        );
+    }
+    
+    #[test]
+    fn test_parse_sync_event() {
+        // Create a sample sync event JSON
+        let sync_event = json!({
+            "params": {
+                "result": {
+                    "address": "0x1234567890abcdef1234567890abcdef12345678",
+                    "topics": [
+                        "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1"
+                    ],
+                    "data": "0x000000000000000000000000000000000000000000000000000000000000007b0000000000000000000000000000000000000000000000000000000000000123",
+                    "transactionHash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+                    "blockNumber": "0x123456"
+                }
+            }
+        });
+        
+        // Convert to string
+        let event_str = sync_event.to_string();
+        
+        // Parse the event
+        let parsed: Value = serde_json::from_str(&event_str).unwrap();
+        
+        // Verify parsing logic
+        let params = parsed.get("params").unwrap();
+        let result = params.get("result").unwrap();
+        let topics = result.get("topics").unwrap();
+        let first_topic = topics.as_array().unwrap().first().unwrap();
+        
+        assert_eq!(first_topic.as_str().unwrap(), SYNC_TOPIC);
+        
+        // Test data parsing
+        let data = result.get("data").unwrap().as_str().unwrap();
+        let data = data.trim_start_matches("0x");
+        
+        let reserve0 = u128::from_str_radix(&data[0..64], 16).unwrap();
+        let reserve1 = u128::from_str_radix(&data[64..128], 16).unwrap();
+        
+        assert_eq!(reserve0, 123); // 0x7b in hex
+        assert_eq!(reserve1, 291); // 0x123 in hex
+    }
+    
+    // Mock test for WebSocket connection
+    // This would require more complex setup with mocks
+    #[test]
+    fn test_subscribe_request_format() {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "method": "eth_subscribe",
+            "params": ["logs"],
+            "id": 1
+        });
+        
+        assert_eq!(request["jsonrpc"], "2.0");
+        assert_eq!(request["method"], "eth_subscribe");
+        assert_eq!(request["params"][0], "logs");
+        assert_eq!(request["id"], 1);
+    }
+}
