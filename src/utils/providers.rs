@@ -84,7 +84,7 @@ use tokio::net::TcpStream;
 /// # Panics
 /// * If `WEBSOCKET_URL` environment variable is not set
 pub async fn send_ws_request(request: String)
-    -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Report> {
+                             -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Report> {
     let websocket_url = std::env::var("WEBSOCKET_URL").expect("WEBSOCKET_URL not set");
     // Connect to WebSocket
     let (mut ws_stream, _) = connect_async(websocket_url).await?;

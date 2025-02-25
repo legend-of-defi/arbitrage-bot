@@ -37,13 +37,11 @@ enum Commands {
 }
 
 async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
-    let _config = Config::from_env();
     setup_logger().expect("Failed to set up logger");
     println!(
         "Server Started with DATABASE_URL: {}",
         env::var("DATABASE_URL").unwrap());
 
-    let _provider = create_http_provider().await?;
     let _ =
         read_all_pairs_v2(address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"), 3000).await;
 

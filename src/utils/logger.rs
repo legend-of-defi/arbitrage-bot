@@ -14,8 +14,6 @@ pub fn setup_logger() -> Result<(), Error> {
     Dispatch::new()
         // Set the default logging level
         .level(log::LevelFilter::Info)
-        // Configure logging to file
-        .chain(fern::log_file("web_server.log")?)
         // Configure logging to console
         .chain(std::io::stdout())
         // Format log messages with time and log level
