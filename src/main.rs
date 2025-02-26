@@ -1,10 +1,12 @@
 #![allow(dead_code, unused_variables)]
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 
-use crate::bootstrap::{read_all_pairs_v2, load_all_pools};
+use crate::arb::market::Market;
+use crate::arb::token::TokenId;
+use crate::bootstrap::{load_all_pools, read_all_pairs_v2};
 use crate::bot::Bot;
 use crate::config::Config;
 use crate::db_service::PairService;
@@ -12,12 +14,9 @@ use crate::utils::app_context::AppContext;
 use crate::utils::db_connect::establish_connection;
 use crate::utils::logger::setup_logger;
 use crate::utils::providers::create_http_provider;
-use crate::arb::market::Market;
 use alloy::primitives::{address, U256};
 use clap::{Parser, Subcommand};
 use fly::sync::subscriber::subscribe_to_sync;
-use crate::arb::pool::{Pool, PoolId};
-use crate::arb::token::TokenId;
 
 mod arb;
 mod bootstrap;

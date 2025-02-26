@@ -6,7 +6,6 @@ use crate::schemas::pairs;
 use diesel::prelude::*;
 use crate::arb::pool::{Pool, PoolId};
 use crate::arb::token::TokenId;
-use crate::models::factory::Factory;
 
 pub struct PairService;
 

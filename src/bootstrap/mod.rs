@@ -1,19 +1,20 @@
 pub mod types;
 
-use std::collections::HashSet;
+use crate::bootstrap::types::{PairInfo, Reserves};
+use crate::db_service::{DbManager, PairService};
+use crate::models::factory::NewFactory;
+use crate::models::token::NewToken;
+use crate::utils::app_context::AppContext;
+use crate::utils::providers::create_http_provider;
+use crate::arb::pool::Pool;
+
 use alloy::{
     primitives::{address, Address, U256},
     sol,
 };
+use std::collections::HashSet;
 use std::ops::Add;
 use std::str::FromStr;
-use crate::arb::pool::{Pool, PoolId};
-use crate::bootstrap::types::{PairInfo, Reserves};
-use crate::db_service::{DbManager, PairService};
-use crate::models::factory::{Factory, NewFactory};
-use crate::models::token::{NewToken, Token};
-use crate::utils::app_context::AppContext;
-use crate::utils::providers::create_http_provider;
 
 sol!(
     #[allow(missing_docs)]
@@ -213,7 +214,7 @@ pub async fn load_all_pools(batch_size: usize) -> HashSet<Pool> {
     for pool in pools_clone.chunks(batch_size) {
         let addresses: Vec<Address> = pool
             .iter()
-            .map(|pair| Address::from_str(&*pair.id.to_string()).unwrap())
+            .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
             .collect();
 
         // Process single batch
@@ -225,8 +226,8 @@ pub async fn load_all_pools(batch_size: usize) -> HashSet<Pool> {
             // Remove old pool and insert updated one
             if pools.remove(pool) {
                 let mut updated_pool = pool.clone();
-                updated_pool.reserve0 = new_reserves.reserve0.clone();
-                updated_pool.reserve1 = new_reserves.reserve1.clone();
+                updated_pool.reserve0 = new_reserves.reserve0;
+                updated_pool.reserve1 = new_reserves.reserve1;
                 pools_to_replace.push(updated_pool);
             }
         }
