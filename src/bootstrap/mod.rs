@@ -213,7 +213,7 @@ pub async fn load_all_pools(batch_size: usize) -> HashSet<Pool> {
     for pool in pools_clone.chunks(batch_size) {
         let addresses: Vec<Address> = pool
             .iter()
-            .map(|pair| Address::from_str(&*pair.id).unwrap())
+            .map(|pair| Address::from_str(&*pair.id.to_string()).unwrap())
             .collect();
 
         // Process single batch
