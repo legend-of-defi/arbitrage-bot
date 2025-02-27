@@ -4,7 +4,7 @@
 //! Ethereum-compatible networks, including both local and remote providers.
 //! It supports connections to:
 //! - Ethereum Mainnet (local via IPC and remote via Infura)
-//! - Base Network (local via IPC and remote via Alchemy)
+//! - Base Network (local via WebSocket and remote via Alchemy)
 
 use crate::utils::{db_connect::establish_connection, signer::Signer};
 use diesel::PgConnection;
@@ -13,20 +13,18 @@ use std::env;
 
 use alloy::{
     network::Ethereum,
-    providers::{IpcConnect, Provider, ProviderBuilder, RootProvider},
+    providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
 };
 use url::Url;
 
 /// Application context holding shared network providers.
 ///
-/// This struct maintains connections to different blockchain networks,
-/// providing both local and remote access to Ethereum and Base networks.
+/// This struct maintains connections to blockchain networks,
+/// providing both local and remote access to the Base network.
 #[allow(dead_code)]
 pub struct AppContext {
-    /// Local Base node connection via IPC
-    pub base_local: RootProvider<Ethereum>,
-    /// Remote Base network connection via Alchemy
-    pub base_remote: RootProvider<Ethereum>,
+    /// Base network connection (either local or remote)
+    pub base_provider: RootProvider<Ethereum>,
     /// Database connection
     pub conn: PgConnection,
     /// Transaction signer
@@ -45,8 +43,7 @@ impl AppContext {
     #[allow(dead_code)]
     pub async fn new() -> Result<Self, Error> {
         Ok(Self {
-            base_local: Self::base_local().await?,
-            base_remote: Self::base_remote()?,
+            base_provider: Self::base_provider().await?,
             conn: establish_connection()?,
             signer: Signer::new("/tmp/fly.sock"),
         })
@@ -74,22 +71,40 @@ impl AppContext {
         Ok((*provider.root()).clone())
     }
 
-    /// Creates a connection to a local Base node via IPC.
+    /// Creates a connection to a local Base node via WebSocket.
     ///
     /// # Returns
     /// * `Result<RootProvider<Ethereum>, Error>` - The provider
     ///
     /// # Path
-    /// Uses the IPC socket at `/opt/base/data/geth.ipc`
+    /// Connects to WebSocket at `ws://localhost:8546`
     ///
     /// # Errors
-    /// * If IPC socket connection fails
+    /// * If WebSocket connection fails
     /// * If provider initialization fails
     #[allow(dead_code)]
     pub async fn base_local() -> Result<RootProvider<Ethereum>, Error> {
-        let ipc_path = "/opt/base/data/geth.ipc";
-        let ipc = IpcConnect::new(ipc_path.to_string());
-        let provider = ProviderBuilder::new().on_ipc(ipc).await?;
+        let ws = WsConnect::new("ws://localhost:8546");
+        let provider = ProviderBuilder::new().on_ws(ws).await?;
         Ok((*provider.root()).clone())
+    }
+
+    /// Selects the appropriate Base provider based on environment.
+    ///
+    /// Uses remote Alchemy provider if FLY_ALCHEMY_API_KEY is set,
+    /// otherwise falls back to local WebSocket connection.
+    ///
+    /// # Returns
+    /// * `Result<RootProvider<Ethereum>, Error>` - The selected provider
+    ///
+    /// # Errors
+    /// * If the selected provider connection fails
+    #[allow(dead_code)]
+    pub async fn base_provider() -> Result<RootProvider<Ethereum>, Error> {
+        if env::var("FLY_ALCHEMY_API_KEY").is_ok() {
+            Self::base_remote()
+        } else {
+            Self::base_local().await
+        }
     }
 }

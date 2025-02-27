@@ -45,7 +45,7 @@ pub async fn read_pairs_v2_by_range(
     to: U256,
 ) -> Result<Vec<PairInfo>, eyre::Report> {
     let app_context = AppContext::new().await.expect("app context");
-    let provider = app_context.base_remote;
+    let provider = app_context.base_provider;
 
     let uniswap_v2_batch_request = IUniswapV2BatchRequest::new(
         address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"),
@@ -82,7 +82,7 @@ pub async fn read_pairs_v2_by_range(
 pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), eyre::Report> {
     let context = AppContext::new().await.expect("Failed to create context");
     let mut conn = context.conn;
-    let provider = context.base_remote;
+    let provider = context.base_provider;
 
     // Get last saved pair index
     let mut start = (DbManager::get_last_pair_index(&mut conn, &factory.to_string())?)
