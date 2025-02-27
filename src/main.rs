@@ -1,12 +1,8 @@
 #![allow(dead_code, unused_variables)]
-
-use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 
-use crate::arb::market::Market;
-use crate::arb::token::TokenId;
-use crate::bootstrap::{load_all_pools, read_all_pairs_v2};
+use crate::bootstrap::{read_all_pairs_v2, read_all_reserves};
 use crate::bot::Bot;
 use crate::config::Config;
 use crate::db_service::PairService;
@@ -14,11 +10,10 @@ use crate::utils::app_context::AppContext;
 use crate::utils::db_connect::establish_connection;
 use crate::utils::logger::setup_logger;
 use crate::utils::providers::create_http_provider;
-use alloy::primitives::{address, U256};
+use alloy::primitives::address;
 use clap::{Parser, Subcommand};
 use fly::sync::subscriber::subscribe_to_sync;
 
-mod arb;
 mod bootstrap;
 mod bot;
 mod config;
@@ -64,13 +59,25 @@ async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
 
     let context = AppContext::new().await.expect("Failed to create context");
 
-    let pools = load_all_pools(3000).await;
-    let num_pairs = pools.len();
-    let mut balances = HashMap::with_capacity(num_pairs);
+    // Display all pairs with token information
+    // let pairs = PairService::read_all_pairs(&mut context.conn);
 
-    // Tether Address on base (we can update it later)
-    balances.insert(TokenId::from("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"), U256::from(0));
-    let _market = Market::new(&pools, balances);
+    // println!("\nFound {} pairs", pairs.len());
+    //
+    // for pair in pairs {
+    //     if let Some((pair, token0, token1)) = PairService::read_pair_with_tokens(&mut context.conn, pair.id) {
+    //         println!(
+    //             "Pair: {} - Token0: {} ({}), Token1: {} ({})",
+    //             pair.address,
+    //             token0.symbol.unwrap_or_else(|| "Unknown".to_string()),
+    //             token0.address,
+    //             token1.symbol.unwrap_or_else(|| "Unknown".to_string()),
+    //             token1.address,
+    //         );
+    //     }
+    // }
+
+    let all_reserves = read_all_reserves(3000).await;
 
     subscribe_to_sync().await?;
 
