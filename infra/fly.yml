@@ -1,0 +1,32 @@
+---
+- name: Setup /fly directory and configure fly user and service
+  hosts: bee
+  become: true
+  tasks:
+    - name: Create fly system user
+      ansible.builtin.user:
+        name: fly
+        groups: fly
+        system: true
+        create_home: false
+
+    - name: Template fly environment file
+      ansible.builtin.template:
+        src: templates/fly.env.j2
+        dest: /etc/default/fly.env
+        owner: fly
+        group: fly
+        mode: '0400'
+
+    - name: Template fly service
+      ansible.builtin.template:
+        src: templates/fly.service.j2
+        dest: /etc/systemd/system/fly.service
+        mode: '0644'
+
+    - name: Enable and start fly service
+      ansible.builtin.systemd:
+        name: fly
+        enabled: true
+        state: started
+        daemon_reload: true

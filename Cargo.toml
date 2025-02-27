@@ -13,7 +13,6 @@ serde_json = "1"
 diesel = { version = "2.2.7", features = ["postgres"] }
 fastrand = "2.0.1"
 alloy = { version = "0.11.1", features = ["full"] }
-derive_more = { version = "1.0.0", features = ["display"] }
 futures = "0.3.31"
 futures-util = "0.3.31"
 eyre = "0.6.12"
@@ -22,6 +21,7 @@ url = "2.5.0"
 serde = { version = "1", features = ["derive"] }
 clap = { version = "4.0", features = ["derive"] }
 tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
+derive_more = { version = "2.0.1", features = ["display"] }
 [dev-dependencies]
 criterion = "0.5"
 

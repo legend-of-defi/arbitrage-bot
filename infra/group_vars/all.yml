@@ -1,0 +1,2 @@
+# Common variables used across playbooks
+rust_version: "1.84.0"

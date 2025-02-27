@@ -1,0 +1,106 @@
+---
+- name: Install and configure PostgreSQL
+  hosts: bee
+  become: true
+  tasks:
+    - name: Add PostgreSQL repository key
+      ansible.builtin.apt_key:
+        url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        state: present
+
+    - name: Add PostgreSQL repository
+      ansible.builtin.apt_repository:
+        repo: deb http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main
+        state: present
+        filename: pgdg
+
+    - name: Stop PostgreSQL service if running
+      ansible.builtin.service:
+        name: postgresql
+        state: stopped
+      failed_when: false
+
+    - name: Remove existing PostgreSQL data directory
+      ansible.builtin.file:
+        path: /var/lib/postgresql/16/main
+        state: absent
+
+    - name: Create empty PostgreSQL data directory
+      ansible.builtin.file:
+        path: /var/lib/postgresql/16/main
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+
+    - name: Install PostgreSQL 16
+      ansible.builtin.apt:
+        name:
+          - postgresql-16
+          - postgresql-contrib-16
+        state: present
+        update_cache: true
+
+    - name: Configure pg_hba.conf for local socket connections
+      ansible.builtin.copy:
+        content: |
+          # TYPE  DATABASE        USER            ADDRESS                 METHOD
+          local   all            all                                     trust
+          local   all            postgres                               trust
+        dest: /etc/postgresql/16/main/pg_hba.conf
+        owner: postgres
+        group: postgres
+        mode: '0600'
+
+    - name: Copy PostgreSQL service file
+      ansible.builtin.template:
+        src: postgres.service.j2
+        dest: /etc/systemd/system/postgresql.service
+        mode: '0644'
+        owner: root
+        group: root
+
+    - name: Add stas and fly users to postgres group
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups: postgres
+        append: true
+      loop:
+        - stas
+        - fly
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Initialize PostgreSQL database
+      ansible.builtin.command:
+        cmd: /usr/lib/postgresql/16/bin/initdb -D /var/lib/postgresql/16/main
+      become: true
+      become_user: postgres
+      args:
+        creates: /var/lib/postgresql/16/main/postgresql.conf
+
+    - name: Ensure correct ownership of PostgreSQL data directory
+      ansible.builtin.file:
+        path: /var/lib/postgresql/16/main
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+        recurse: true
+
+    - name: Start and enable PostgreSQL service
+      ansible.builtin.service:
+        name: postgresql
+        state: started
+        enabled: true
+
+    - name: Add DATABASE_URL to /etc/profile.d
+      ansible.builtin.lineinfile:
+        path: /etc/profile.d/database.sh
+        create: true
+        line: 'export DATABASE_URL=postgresql://fly@localhost?host=/var/run/postgresql'
+        mode: '0644'
+        owner: root
+        group: root

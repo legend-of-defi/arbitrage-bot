@@ -4,14 +4,16 @@ After=network.target
 
 [Service]
 Type=simple
-User=stas
-Group=stas
-WorkingDirectory=/home/stas/crypto
-EnvironmentFile=/opt/fly/fly.env
+User=fly
+Group=fly
+EnvironmentFile=/etc/default/fly
 ExecStart=/usr/bin/fly
-StandardOutput=append:/var/log/fly/output.log
-StandardError=append:/var/log/fly/error.log
+LogsDirectory=fly
+LogsDirectoryMode=0755
+RuntimeDirectory=fly
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
-EOF

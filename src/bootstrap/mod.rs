@@ -1,18 +1,20 @@
 pub mod types;
 
-use alloy::{
-    primitives::{address, Address, U256},
-    sol,
-};
-use std::ops::Add;
-use std::str::FromStr;
-
 use crate::bootstrap::types::{PairInfo, Reserves};
 use crate::db_service::{DbManager, PairService};
 use crate::models::factory::NewFactory;
 use crate::models::token::NewToken;
 use crate::utils::app_context::AppContext;
 use crate::utils::providers::create_http_provider;
+use crate::arb::pool::Pool;
+
+use alloy::{
+    primitives::{address, Address, U256},
+    sol,
+};
+use std::collections::HashSet;
+use std::ops::Add;
+use std::str::FromStr;
 
 sol!(
     #[allow(missing_docs)]
@@ -201,30 +203,43 @@ pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
 /// * If contract calls fail
 /// * If pair addresses cannot be parsed
 #[allow(dead_code)]
-pub async fn read_all_reserves(batch_size: usize) -> Vec<(String, Reserves)> {
+pub async fn load_all_pools(batch_size: usize) -> HashSet<Pool> {
     let mut context = AppContext::new().await.expect("app context");
-    let pairs = PairService::read_all_pairs(&mut context.conn);
-    let mut all_reserves = Vec::with_capacity(pairs.len());
+    let mut pools = PairService::load_all_pools(&mut context.conn);
+
+    let pools_clone: Vec<Pool> = pools.iter().cloned().collect();
+    let mut pools_to_replace = Vec::new();
 
     // Process pairs in batches sequentially
-    for chunk in pairs.chunks(batch_size) {
-        let addresses: Vec<Address> = chunk
+    for pool in pools_clone.chunks(batch_size) {
+        let addresses: Vec<Address> = pool
             .iter()
-            .map(|pair| Address::from_str(&pair.address).unwrap())
+            .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
             .collect();
 
         // Process single batch
         let reserves = read_reserves_by_range(addresses).await;
 
-        // Add results to all_reserves
-        for (pair, reserve) in chunk.iter().zip(reserves) {
-            all_reserves.push((pair.address.clone(), reserve));
+        for (i, pool) in pool.iter().enumerate() {
+            let new_reserves = &reserves[i];
+
+            // Remove old pool and insert updated one
+            if pools.remove(pool) {
+                let mut updated_pool = pool.clone();
+                updated_pool.reserve0 = new_reserves.reserve0;
+                updated_pool.reserve1 = new_reserves.reserve1;
+                pools_to_replace.push(updated_pool);
+            }
         }
 
         // Add delay between batches
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
-    all_reserves
-}
+    // Insert all updated pools at once (after iteration)
+    for pool in pools_to_replace {
+        pools.insert(pool);
+    }
 
+    pools
+}

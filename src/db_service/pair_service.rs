@@ -1,7 +1,11 @@
+use std::collections::HashSet;
+use alloy::primitives::U256;
 use crate::models::pair::{Pair, NewPair};
 use crate::models::token::Token;
 use crate::schemas::pairs;
 use diesel::prelude::*;
+use crate::arb::pool::{Pool, PoolId};
+use crate::arb::token::TokenId;
 
 pub struct PairService;
 
@@ -120,6 +124,36 @@ impl PairService {
             .ok()?;
 
         Some((pair, token0, token1))
+    }
+
+    #[allow(dead_code)]
+    pub fn load_all_pools(conn: &mut PgConnection) -> HashSet<Pool> {
+        use crate::schemas::{tokens, factories};
+        use crate::models::factory::Factory;
+
+        let pairs = Self::read_all_pairs(conn);
+        let num_pairs = pairs.len();
+        let mut pools = HashSet::with_capacity(num_pairs);
+
+        for pair in pairs {
+            if let (Ok(token0), Ok(token1), Ok(factory)) = (
+                tokens::table.find(pair.token0_id).first::<Token>(conn),
+                tokens::table.find(pair.token1_id).first::<Token>(conn),
+                factories::table.find(pair.factory_id).first::<Factory>(conn),
+            ) {
+                pools.insert(
+                    Pool::new(
+                        PoolId::from(&*pair.address),
+                        TokenId::from(&*token0.address),
+                        TokenId::from(&*token1.address),
+                        U256::from(0),
+                        U256::from(0)
+                    )
+                );
+            }
+        }
+
+        pools
     }
 
     /// Get all pairs that include a specific token

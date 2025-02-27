@@ -1,0 +1,24 @@
+[Unit]
+Description=Prysm Ethereum Consensus Client
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User={{ prysm_user }}
+ExecStart=/root/ethereum/consensus/prysm/prysm.sh beacon-chain \
+    --checkpoint-sync-url=https://sync-mainnet.beaconcha.in \
+    --genesis-beacon-api-url=https://sync-mainnet.beaconcha.in \
+    --execution-endpoint=http://localhost:8551 \
+    --jwt-secret=/root/ethereum/consensus/prysm/jwt.hex \
+    --datadir /root/volume/.eth2 \
+    --grpc-gateway-corsdomain=* \
+    --grpc-gateway-port=3500 \
+    --grpc-gateway-host=0.0.0.0 \
+    --rpc-port=4001 \
+    --rpc-host=0.0.0.0 \
+    --accept-terms-of-use
+[Install]
+WantedBy=multi-user.target

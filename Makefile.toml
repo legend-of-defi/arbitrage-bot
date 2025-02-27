@@ -2,10 +2,16 @@
 script = [
     "mkdir -p .git/hooks",
     "echo '#!/bin/sh\ncargo clippy' > .git/hooks/pre-push",
-    "chmod +x .git/hooks/pre-push"
+    "chmod +x .git/hooks/pre-push",
 ]
 
+[tasks.deploy]
+dependencies = ["build-release"]
+script = [
+    "sudo cp target/release/fly /usr/bin/fly",
+    "sudo systemctl restart fly"
+]
 
-[tasks.fly]
+[tasks.build-release]
 command = "cargo"
-args = ["run", "--bin", "mev-eth", "--", "${@}"]
+args = ["build", "--release"]

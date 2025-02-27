@@ -1,0 +1,210 @@
+---
+- name: Install system packages
+  hosts: bee
+  become: true
+  vars:
+    rust_version: "1.84.0"
+  tasks:
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: dist
+        force_apt_get: true
+      register: upgrade_result
+      retries: 3
+      delay: 5
+      until: upgrade_result is success
+
+    - name: Install packages
+      ansible.builtin.apt:
+        name:
+          - libssl-dev
+          - pkg-config
+          - openssl
+          - build-essential
+          - zlib1g-dev
+          - libpq-dev
+          - git
+          - curl
+          - atop
+          - glances
+          - linux-tools-common
+          - linux-headers-generic
+          - sshfs
+          - direnv
+          - jq
+          - acl
+          - pq
+          - unzip
+          - ca-certificates
+          - curl
+          - gnupg
+          - apt-transport-https
+
+        state: present
+        update_cache: true
+
+    - name: Configure sysctl for performance monitoring
+      ansible.posix.sysctl:
+        name: kernel.perf_event_paranoid
+        value: -1
+        state: present
+        sysctl_file: /etc/sysctl.conf
+        reload: true
+
+    - name: Configure sysctl for kernel kptr_restrict
+      ansible.posix.sysctl:
+        name: kernel.kptr_restrict
+        value: 0
+        state: present
+        sysctl_file: /etc/sysctl.conf
+        reload: true
+
+    - name: Apply sysctl changes
+      ansible.builtin.service:
+        name: systemd-sysctl
+        state: restarted
+
+    - name: Download rustup installer
+      ansible.builtin.get_url:
+        url: https://sh.rustup.rs
+        dest: /tmp/rustup.sh
+        mode: '0755'
+
+    - name: Install Rust globally
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /tmp/rustup.sh -y
+      args:
+        creates: "/usr/local/rust/bin/rustc"
+
+    - name: Add Rust to system-wide PATH
+      ansible.builtin.copy:
+        dest: /etc/profile.d/rust.sh
+        content: |
+          export CARGO_HOME=/usr/local/rust
+          export RUSTUP_HOME=/opt/rustup
+          export RUST_WRAPPER=sccache
+          export PATH=$CARGO_HOME/bin:$PATH
+        mode: '0644'
+
+    - name: Verify Rust and Cargo installation
+      ansible.builtin.shell: |
+        . /etc/profile.d/rust.sh
+        which cargo && cargo --version
+      register: cargo_check
+      changed_when: false
+      args:
+        executable: /bin/bash
+
+    - name: Install cargo-make
+      ansible.builtin.shell: |
+        source /etc/profile.d/rust.sh
+        cargo install cargo-make
+      args:
+        creates: "/usr/local/rust/bin/cargo-make"
+
+    - name: Install cargo flamegraph
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install flamegraph
+      args:
+        creates: "/usr/local/rust/bin/flamegraph"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install rust-analyzer
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/rustup component add rust-analyzer
+      args:
+        creates: "/opt/rustup/toolchains/{{ rust_version }}-x86_64-unknown-linux-gnu/bin/rust-analyzer"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install specific Rust version
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/rustup default {{ rust_version }}
+      args:
+        creates: "/opt/rustup/toolchains/{{ rust_version }}-x86_64-unknown-linux-gnu"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install sccache
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install sccache
+      args:
+        creates: "/usr/local/rust/bin/sccache"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Install cargo-script
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install cargo-script
+      args:
+        creates: "/usr/local/rust/bin/cargo-script"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+    - name: Create global foundry directory
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - /usr/local/foundry
+        - /usr/local/foundry/bin
+
+    - name: Download Foundry installer
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/foundry-rs/foundry/master/foundryup/foundryup
+        dest: /tmp/foundryup
+        mode: '0755'
+
+    - name: Install Foundry
+      ansible.builtin.shell: |
+        FOUNDRY_DIR=/usr/local/foundry /tmp/foundryup
+      args:
+        creates: "/usr/local/foundry/bin/forge"
+        executable: /bin/bash
+      environment:
+        HOME: "/usr/local/foundry"
+
+    - name: Add Foundry to system-wide PATH
+      ansible.builtin.copy:
+        dest: /etc/profile.d/foundry.sh
+        content: |
+          export PATH=/usr/local/foundry/bin:$PATH
+        mode: '0644'
+
+    - name: Create symlinks to /usr/local/bin
+      ansible.builtin.file:
+        src: "/usr/local/foundry/bin/{{ item }}"
+        dest: "/usr/local/bin/{{ item }}"
+        state: link
+      loop:
+        - forge
+        - cast
+        - anvil
+        - chisel
+
+    - name: Verify Foundry installation
+      ansible.builtin.shell: |
+        forge --version
+      register: forge_check
+      changed_when: false
+      args:
+        executable: /bin/bash
+
+    - name: Install Diesel CLI with PostgreSQL support
+      ansible.builtin.shell: |
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install diesel_cli --no-default-features --features postgres
+      args:
+        creates: "/usr/local/rust/bin/diesel"
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
+    - name: Verify Diesel installation
+      ansible.builtin.shell: |
+        . /etc/profile.d/rust.sh
+        diesel --version
+      register: diesel_check
+      changed_when: false
+      args:
+        executable: /bin/bash
+

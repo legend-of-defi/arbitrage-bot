@@ -83,7 +83,7 @@ impl AppContext {
     /// * If WebSocket connection fails
     /// * If provider initialization fails
     #[allow(dead_code)]
-    pub async fn base_local() -> Result<RootProvider<Ethereum>, Error> {
+    pub async fn base_local_ws() -> Result<RootProvider<Ethereum>, Error> {
         let ws = WsConnect::new("ws://localhost:8546");
         let provider = ProviderBuilder::new().on_ws(ws).await?;
         Ok((*provider.root()).clone())
@@ -104,7 +104,7 @@ impl AppContext {
         if env::var("FLY_ALCHEMY_API_KEY").is_ok() {
             Self::base_remote()
         } else {
-            Self::base_local().await
+            Self::base_local_ws().await
         }
     }
 }

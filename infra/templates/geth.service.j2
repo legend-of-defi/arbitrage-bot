@@ -1,0 +1,32 @@
+[Unit]
+Description=Ethereum go client
+After=network.target
+Wants=network.target
+
+[Service]
+User=root
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=/usr/bin/geth \
+    --http \
+    --http.addr localhost \
+    --http.port 8645 \
+    --http.corsdomain "*" \
+    --http.api personal,eth,net,web3,debug,txpool,admin \
+    --authrpc.jwtsecret /root/ethereum/consensus/prysm/jwt.hex \
+    --ws \
+    --ws.addr localhost \
+    --ws.port 8646 \
+    --ws.origins="*" \
+    --ws.api eth,net,web3,txpool,debug \
+    --metrics \
+    --maxpeers 100 \
+    --datadir /root/volume/.ethereum \
+    --rpc.evmtimeout 0 \
+    --txpool.globalslots=50000 \
+    --txpool.globalqueue=5000 \
+    --cache 4096
+
+[Install]
+WantedBy=default.target

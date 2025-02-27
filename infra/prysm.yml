@@ -1,0 +1,64 @@
+---
+- name: Setup Prysm Beacon Node
+  hosts: bee
+  become: true
+  vars:
+    prysm_version: "v4.2.1"
+    prysm_user: root
+    prysm_home: /root/ethereum/consensus/prysm
+    jwt_secret_path: /root/ethereum/consensus/prysm/jwt.hex
+  tasks:
+    - name: Create prysm user
+      ansible.builtin.user:
+        name: "{{ prysm_user }}"
+        system: true
+        create_home: false
+
+    - name: Create prysm directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ prysm_user }}"
+        group: "{{ prysm_user }}"
+        mode: '0755'
+      with_items:
+        - "{{ prysm_home }}"
+        - "{{ prysm_home }}/bin"
+        - "{{ prysm_home }}/data"
+
+    - name: Download Prysm beacon chain binary
+      ansible.builtin.get_url:
+        url: "https://github.com/prysmaticlabs/prysm/releases/download/{{ prysm_version }}/beacon-chain-{{ prysm_version }}-linux-amd64"
+        dest: "{{ prysm_home }}/bin/beacon-chain"
+        mode: '0755'
+        owner: "{{ prysm_user }}"
+        group: "{{ prysm_user }}"
+
+    - name: Download and set permissions for Prysm script
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/prysmaticlabs/prysm/master/prysm.sh
+        dest: "{{ prysm_home }}/prysm.sh"
+        mode: '0755'
+        owner: "{{ prysm_user }}"
+        group: "{{ prysm_user }}"
+
+    - name: Generate JWT secret for Prysm
+      ansible.builtin.command:
+        cmd: ./prysm.sh beacon-chain generate-auth-secret
+      args:
+        chdir: "{{ prysm_home }}"
+        creates: "{{ jwt_secret_path }}"
+
+    - name: Create systemd service
+      ansible.builtin.template:
+
+        src: templates/prysm.service.j2
+        dest: /etc/systemd/system/prysm.service
+        mode: '0644'
+
+    - name: Start and enable Prysm service
+      ansible.builtin.systemd:
+        name: prysm
+        state: started
+        enabled: true
+        daemon_reload: true
