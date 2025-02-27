@@ -20,6 +20,10 @@ contract SimpleExecutor {
     error WithdrawalFailed();
     error ProfitTargetNotMet(uint256 minimumProfit, int256 actualProfit);
     error InvalidPairCount();
+    error CallFailed();
+    error InvalidAddress();
+    error ERC20Failed();
+    error NoBalanceToWithdraw();
 
     event FailureInfo(uint112 indexed index, string reason);
 
@@ -46,6 +50,46 @@ contract SimpleExecutor {
     function withdraw() external onlyOwner {
         (bool success,) = owner.call{value: address(this).balance}("");
         if (!success) revert WithdrawalFailed();
+    }
+
+    /// @notice Withdraws ERC20 tokens from the contract
+    /// @param token Address of the ERC20 token
+    /// @param recipient Address to send the tokens to
+    /// @param amount Amount of tokens to withdraw
+    function withdrawERC20(address token, address recipient, uint256 amount) external onlyOwner {
+        uint256 contractBalance = IERC20(token).balanceOf(address(this));
+
+        if (contractBalance < amount) revert NoBalanceToWithdraw();
+
+        bool success = IERC20(token).transfer(recipient, amount);
+        if (!success) revert ERC20Failed();
+    }
+
+    /// @notice Executes an arbitrary low-level call to another contract or address
+    /// @dev This function allows the owner to call any external contract with custom calldata
+    /// @param _to The address of the target contract or recipient
+    /// @param _value The amount of ETH (in wei) to send with the call
+    /// @param _data Encoded function call data to be executed
+    /// @return result The raw return data from the executed call
+    function callContract(address payable _to, uint256 _value, bytes calldata _data)
+        external
+        payable
+        onlyOwner
+        returns (bytes memory result)
+    {
+        // Ensure that the target address is not the zero address to prevent unintended behavior.
+        if (_to == address(0)) revert InvalidAddress();
+
+        // Perform a low-level call to `_to` with `_value` of ETH and `_data` as calldata.
+        // `_success` indicates whether the call was successful.
+        // `_result` contains any return data from the called contract.
+        (bool success, bytes memory returnData) = _to.call{value: _value}(_data);
+
+        // Revert the transaction if the call fails to prevent further execution.
+        if (!success) revert CallFailed();
+
+        // Return the raw data received from the called contract.
+        return returnData;
     }
 
     /// @notice Executes a series of swaps for arbitrage

@@ -10,9 +10,42 @@ interface IERC20 {
     function transfer(address to, uint256 amount) external returns (bool);
 }
 
+// Contract to test `call` functionality
+contract TargetContract {
+    uint256 public storedValue;
+
+    function setValue(uint256 _value) external {
+        storedValue = _value;
+    }
+
+    function getValue() external view returns (uint256) {
+        return storedValue;
+    }
+}
+
+contract TargetContractWithRevert {
+    function revertingFunction() external pure {
+        revert("Revert in TargetContract");
+    }
+}
+
+contract MockFailingERC20 {
+    function balanceOf(address) external pure returns (uint256) {
+        return 1000 * 1e18; // Return some fake balance
+    }
+
+    function transfer(address, uint256) external pure returns (bool) {
+        return false; // Always fail the transfer
+    }
+}
+
 contract SimpleExecutorTest is Test {
     SimpleExecutor public executor;
+    TargetContract public targetContract;
+
     address public owner;
+    address public targetAddress;
+    address public nonOwner;
 
     // Mainnet addresses
     address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
@@ -21,8 +54,21 @@ contract SimpleExecutorTest is Test {
     address constant SUSHI_USDC_WETH = 0x397FF1542f962076d0BFE58eA045FfA2d347ACa0; // Sushiswap
 
     function setUp() public {
+        // Set the owner address to the current contract (the contract itself)
         owner = address(this);
+
+        // Deploy a new SimpleExecutor contract (the contract being tested)
         executor = new SimpleExecutor();
+
+        // Deploy a new TargetContract (a contract that will be called by the executor)
+        targetContract = new TargetContract();
+
+        // Store the address of the deployed target contract for use in tests
+        targetAddress = address(targetContract);
+
+        // Define a non-owner address (an address that is not the owner of the Executor contract)
+        // This address will be used to test access restrictions for non-owners
+        nonOwner = address(0x1234567890123456789012345678901234567890);
 
         // Fork mainnet using StdChains RPC URL
         vm.createSelectFork(getChain("mainnet").rpcUrl);
@@ -160,6 +206,142 @@ contract SimpleExecutorTest is Test {
         uint256 finalBalance = IERC20(USDC).balanceOf(address(executor));
         assertLt(finalBalance, 1000e6); // Balance should be less than initial amount
     }
+
+    // ---------------------- Call Method Tests Begin ----------------------
+
+    // Test: Call contract as the owner (successful call)
+    function testCallAsOwner() public {
+        // Prepare the data to call the 'setValue' function of the target contract
+        bytes memory data = abi.encodeWithSignature("setValue(uint256)", 42);
+
+        // Convert targetAddress to a payable address
+        address payable targetAddressPayable = payable(targetAddress);
+
+        // Call the contract using the Executor's callContract method
+        (bytes memory result) = executor.callContract(targetAddressPayable, 0, data);
+
+        // Assert that the result is empty (TargetContract doesn't return anything)
+        assertEq(result.length, 0);
+
+        // Assert that the target contract's stored value has been updated correctly
+        assertEq(targetContract.getValue(), 42);
+    }
+
+    // Test: Call contract as a non-owner (should revert)
+    function testCallAsNonOwner() public {
+        // Simulate the call coming from a non-owner
+        vm.prank(nonOwner);
+
+        // Prepare the data to call the 'setValue' function of the target contract
+        bytes memory data = abi.encodeWithSignature("setValue(uint256)", 42);
+
+        // Convert targetAddress to a payable address
+        address payable targetAddressPayable = payable(targetAddress);
+
+        // Expect revert due to 'NotOwner' error in the Executor contract
+        vm.expectRevert(SimpleExecutor.NotOwner.selector);
+
+        // Attempt the call, expecting it to fail
+        executor.callContract(targetAddressPayable, 0, data);
+    }
+
+    // Test: Call contract with an invalid address (should revert)
+    function testCallToInvalidAddress() public {
+        // Set an invalid address (0 address)
+        address payable invalidAddress = payable(address(0));
+
+        // Prepare the data to call the 'setValue' function of the target contract
+        bytes memory data = abi.encodeWithSignature("setValue(uint256)", 42);
+
+        // Expect revert due to 'InvalidAddress' error in the Executor contract
+        vm.expectRevert(SimpleExecutor.InvalidAddress.selector);
+
+        // Attempt the call, expecting it to fail
+        executor.callContract(invalidAddress, 0, data);
+    }
+
+    // Test: Call contract with a revert in the target contract (should revert)
+    function testCallWithRevertInTarget() public {
+        // Deploy a target contract that has a function that always reverts
+        TargetContractWithRevert targetContractWithRevert = new TargetContractWithRevert();
+
+        // Convert target address to a payable address
+        address payable targetAddressPayable = payable(address(targetContractWithRevert));
+
+        // Prepare the data to call the 'revertingFunction' in the target contract
+        bytes memory data = abi.encodeWithSignature("revertingFunction()");
+
+        // Expect revert due to 'CallFailed' error in the Executor contract
+        vm.expectRevert(SimpleExecutor.CallFailed.selector);
+
+        // Attempt the call, expecting it to fail
+        executor.callContract(targetAddressPayable, 0, data);
+    }
+
+    // ---------------------- Call Method Tests End ----------------------
+
+    // ---------------------- Withdraw ERC20 Tests Begin ----------------------
+
+    // Test: Withdraw ERC20 tokens as the owner (successful withdrawal)
+    function testWithdrawERC20AsOwner() public {
+        // Give the Executor contract 1000 USDC tokens
+        deal(USDC, address(executor), 1000e6);
+
+        // Record the initial balance of the owner
+        uint256 initialOwnerBalance = IERC20(USDC).balanceOf(address(this));
+
+        // Call the withdraw function to transfer 1000 USDC to the owner
+        executor.withdrawERC20(USDC, owner, 1000e6);
+
+        // Record the final balance of the owner after the withdrawal
+        uint256 finalOwnerBalance = IERC20(USDC).balanceOf(address(this));
+
+        // Assert that the owner has received the correct amount
+        assertEq(finalOwnerBalance, initialOwnerBalance + 1000e6, "Owner should receive the withdrawn amount");
+
+        // Assert that the Executor contract's balance is now 0
+        assertEq(
+            IERC20(USDC).balanceOf(address(executor)), 0, "Executor contract should have 0 balance after withdrawal"
+        );
+    }
+
+    // Test: Revert ERC20 withdrawal by non-owner (should fail)
+    function testRevert_WithdrawERC20AsNonOwner() public {
+        // Give the Executor contract 1000 USDC tokens
+        deal(USDC, address(executor), 1000e6);
+
+        // Simulate the call coming from a non-owner
+        vm.prank(nonOwner);
+
+        // Expect revert due to 'NotOwner' error in the Executor contract
+        vm.expectRevert(SimpleExecutor.NotOwner.selector);
+
+        // Attempt the withdrawal, which should fail for non-owner
+        executor.withdrawERC20(USDC, nonOwner, 1000e6);
+    }
+
+    // Test: Revert ERC20 withdrawal when the contract has no balance (should fail)
+    function testRevert_WithdrawERC20WhenEmpty() public {
+        // Expect revert due to 'NoBalanceToWithdraw' error (contract has no balance to withdraw)
+        vm.expectRevert(SimpleExecutor.NoBalanceToWithdraw.selector);
+
+        // Attempt the withdrawal, which should fail as the contract has no USDC balance
+        executor.withdrawERC20(address(USDC), address(this), 1e9);
+    }
+
+    // Test: Revert ERC20 withdrawal due to failed transfer (should fail)
+    function testRevert_WithdrawERC20TransferFailed() public {
+        // Deploy a mock ERC20 token that always fails the transfer
+        MockFailingERC20 mockToken = new MockFailingERC20();
+
+        // Expect revert due to 'ERC20Failed' error in the Executor contract
+        vm.expectRevert(SimpleExecutor.ERC20Failed.selector);
+
+        // Attempt the withdrawal, which should fail due to the transfer failure
+        executor.withdrawERC20(address(mockToken), address(this), 1e9);
+    }
+
+    // ---------------------- Withdraw ERC20 Tests End ----------------------
 
     // Allow this contract to receive ETH
     receive() external payable {}
