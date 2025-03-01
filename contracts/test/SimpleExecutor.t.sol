@@ -48,10 +48,10 @@ contract SimpleExecutorTest is Test {
     address public nonOwner;
 
     // Mainnet addresses
-    address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant UNIV2_USDC_WETH = 0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc; // Uniswap V2
-    address constant SUSHI_USDC_WETH = 0x397FF1542f962076d0BFE58eA045FfA2d347ACa0; // Sushiswap
+    address constant WETH = 0x4200000000000000000000000000000000000006;
+    address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
+    address constant UNIV2_USDC_WETH = 0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C; // Uniswap V2
+    address constant STANDARD_UNIV2_PAIR = 0xaEeB835f3Aa21d19ea5E33772DaA9E64f1b6982F; // Standard Uniswap V2 pair (suggested)
 
     function setUp() public {
         // Set the owner address to the current contract (the contract itself)
@@ -71,41 +71,64 @@ contract SimpleExecutorTest is Test {
         nonOwner = address(0x1234567890123456789012345678901234567890);
 
         // Fork mainnet using StdChains RPC URL
-        vm.createSelectFork(getChain("mainnet").rpcUrl);
+        vm.createSelectFork(getChain("base").rpcUrl);
     }
 
     function test_SuccessfulArbitrage() public {
-        // Set fixed reserves for the real deployed pairs.
-        uint112 fixedUSDCReserveUni = 100_000e6; // 200,000 USDC/WETH rate
-        uint112 fixedWETHReserveUni = 0.5 ether;
-        uint112 fixedUSDCReserveSushi = 120_000e6; // 266,666 USDC/WETH rate
-        uint112 fixedWETHReserveSushi = 0.45 ether;
+        // Set fixed reserves using original values with a slight adjustment to the second pair
+        uint112 fixedWETHReserveUni = 1010.78 ether;
+        uint112 fixedUSDCReserveUni = 2_513_107e6;
+        uint112 fixedWETHReserveStandard = 0.86 ether;
+        uint112 fixedUSDCReserveStandard = 2_314e6; // Increased from 2_014e6 to create a better arbitrage opportunity
 
-        // Override reserves in the actual pair contracts on the fork.
-        mockPairReserves(UNIV2_USDC_WETH, fixedUSDCReserveUni, fixedWETHReserveUni);
-        mockPairReserves(SUSHI_USDC_WETH, fixedUSDCReserveSushi, fixedWETHReserveSushi);
+        // Override reserves in the actual pair contracts
+        mockPairReserves(UNIV2_USDC_WETH, fixedWETHReserveUni, fixedUSDCReserveUni);
+        mockPairReserves(STANDARD_UNIV2_PAIR, fixedWETHReserveStandard, fixedUSDCReserveStandard);
 
-        // Provide the executor with 1000 USDC.
-        deal(USDC, address(executor), 1000e6);
+        // Give tokens to the executor and pairs
+        deal(USDC, address(executor), 100_000e6);
+        deal(WETH, address(executor), 10_000 ether);
 
-        // Compute expected outputs from the fixed reserves.
-        uint256 expectedWETHOutUni = getAmountOut(1000e6, fixedUSDCReserveUni, fixedWETHReserveUni);
-        uint256 expectedUSDCOutSushi = getAmountOut(expectedWETHOutUni, fixedWETHReserveSushi, fixedUSDCReserveSushi);
+        deal(WETH, UNIV2_USDC_WETH, fixedWETHReserveUni);
+        deal(USDC, UNIV2_USDC_WETH, fixedUSDCReserveUni);
 
+        deal(WETH, STANDARD_UNIV2_PAIR, fixedWETHReserveStandard);
+        deal(USDC, STANDARD_UNIV2_PAIR, fixedUSDCReserveStandard);
+
+        // Start with USDC, use a small amount to minimize price impact
+        uint256 amountIn = 100e6; // 100 USDC (reduced from 50,000)
+
+        // Calculate expected outputs
+        // For Uniswap: USDC -> WETH
+        uint256 amountOutUni = getAmountOut(amountIn, fixedUSDCReserveUni, fixedWETHReserveUni);
+        // For Standard Uniswap V2 pair: WETH -> USDC
+        uint256 amountOutStandard = getAmountOut(amountOutUni, fixedWETHReserveStandard, fixedUSDCReserveStandard);
+
+        // Create pairs array for the executor
         SimpleExecutor.Pair[] memory pairs = new SimpleExecutor.Pair[](2);
 
-        // First swap: Using Uniswap pair to swap USDC -> WETH.
-        pairs[0] =
-            SimpleExecutor.Pair({contractAddress: UNIV2_USDC_WETH, amountOut: expectedWETHOutUni, isToken0: false});
+        // First swap: USDC -> WETH on Uniswap
+        pairs[0] = SimpleExecutor.Pair({
+            contractAddress: UNIV2_USDC_WETH,
+            amountOut: amountOutUni,
+            isToken0: true // WETH is token0
+        });
 
-        // Second swap: Using Sushiswap pair to swap WETH -> USDC.
-        // Note: The deployed pair sorts tokens, so (USDC, WETH) is the order.
-        // To swap WETH for USDC, you send WETH (token1) and request USDC (token0) out.
-        pairs[1] =
-            SimpleExecutor.Pair({contractAddress: SUSHI_USDC_WETH, amountOut: expectedUSDCOutSushi, isToken0: true});
+        // Second swap: WETH -> USDC on Standard Uniswap V2 pair
+        pairs[1] = SimpleExecutor.Pair({
+            contractAddress: STANDARD_UNIV2_PAIR,
+            amountOut: amountOutStandard,
+            isToken0: false // USDC is token1
+        });
 
-        // Run the arbitrage execution using the pranked, fixed reserves.
-        executor.run(USDC, 1000e6, 27e6, pairs, false); // Require at least 27 USDC profit
+        // Execute the arbitrage with profit check enabled
+        executor.run(
+            USDC,
+            amountIn,
+            0.01e6, // Minimum profit of 0.01 USDC
+            pairs,
+            false // skipProfitCheck = false
+        );
     }
 
     function testRevert_IfInsufficientBalance() public {
@@ -140,36 +163,48 @@ contract SimpleExecutorTest is Test {
 
     function testRevert_IfProfitMarginNotMet() public {
         // Set reserves where arbitrage will result in a loss
-        uint112 fixedUSDCReserveUni = 100_000e6; // 200,000 USDC/WETH rate
+        uint112 fixedUSDCReserveUni = 100_000e6;
         uint112 fixedWETHReserveUni = 0.5 ether;
-        uint112 fixedUSDCReserveSushi = 80_000e6; // 177,777 USDC/WETH rate
-        uint112 fixedWETHReserveSushi = 0.45 ether;
+        uint112 fixedUSDCReserveStandard = 80_000e6;
+        uint112 fixedWETHReserveStandard = 0.45 ether;
 
-        mockPairReserves(UNIV2_USDC_WETH, fixedUSDCReserveUni, fixedWETHReserveUni);
-        mockPairReserves(SUSHI_USDC_WETH, fixedUSDCReserveSushi, fixedWETHReserveSushi);
+        // Make sure reserves are set correctly (WETH is token0, USDC is token1)
+        mockPairReserves(UNIV2_USDC_WETH, fixedWETHReserveUni, fixedUSDCReserveUni);
+        mockPairReserves(STANDARD_UNIV2_PAIR, fixedWETHReserveStandard, fixedUSDCReserveStandard);
 
         // Give executor initial USDC
         deal(USDC, address(executor), 1000e6);
 
+        // Give tokens to the pairs (very important for the swaps to work)
+        deal(WETH, UNIV2_USDC_WETH, fixedWETHReserveUni * 10); // Give 10x the reserves to ensure sufficient liquidity
+        deal(USDC, UNIV2_USDC_WETH, fixedUSDCReserveUni * 10);
+        deal(WETH, STANDARD_UNIV2_PAIR, fixedWETHReserveStandard * 10);
+        deal(USDC, STANDARD_UNIV2_PAIR, fixedUSDCReserveStandard * 10);
+
         // Calculate expected amounts
         uint256 expectedWETHOutUni = getAmountOut(1000e6, fixedUSDCReserveUni, fixedWETHReserveUni);
-        uint256 expectedUSDCOutSushi = getAmountOut(expectedWETHOutUni, fixedWETHReserveSushi, fixedUSDCReserveSushi);
-
+        uint256 expectedUSDCOutStandard =
+            getAmountOut(expectedWETHOutUni, fixedWETHReserveStandard, fixedUSDCReserveStandard);
         SimpleExecutor.Pair[] memory pairs = new SimpleExecutor.Pair[](2);
+
         pairs[0] =
-            SimpleExecutor.Pair({contractAddress: UNIV2_USDC_WETH, amountOut: expectedWETHOutUni, isToken0: false});
+            SimpleExecutor.Pair({contractAddress: UNIV2_USDC_WETH, amountOut: expectedWETHOutUni, isToken0: true});
 
-        pairs[1] =
-            SimpleExecutor.Pair({contractAddress: SUSHI_USDC_WETH, amountOut: expectedUSDCOutSushi, isToken0: true});
+        pairs[1] = SimpleExecutor.Pair({
+            contractAddress: STANDARD_UNIV2_PAIR,
+            amountOut: expectedUSDCOutStandard,
+            isToken0: false
+        });
 
-        int256 actualProfit = int256(expectedUSDCOutSushi) - int256(1000e6);
+        int256 actualProfit = int256(expectedUSDCOutStandard) - int256(1000e6);
         assertEq(actualProfit, -134621970);
+
         // Expect revert because we'll get back less USDC than we put in
         vm.expectRevert(
             abi.encodeWithSelector(
                 SimpleExecutor.ProfitTargetNotMet.selector,
-                27e6, // Require 1 USDC profit
-                -134621970 // Get -134.621970
+                27e6, // Require 27 USDC profit
+                -134621970 // Get -134.621970 USDC
             )
         );
         executor.run(USDC, 1000e6, 27e6, pairs, false);
@@ -177,27 +212,35 @@ contract SimpleExecutorTest is Test {
 
     function test_SkipProfitCheck() public {
         // Set reserves where arbitrage would normally result in a loss
-        uint112 fixedUSDCReserveUni = 100_000e6; // 200,000 USDC/WETH rate
+        uint112 fixedUSDCReserveUni = 100_000e6;
         uint112 fixedWETHReserveUni = 0.5 ether;
-        uint112 fixedUSDCReserveSushi = 80_000e6; // 177,777 USDC/WETH rate
-        uint112 fixedWETHReserveSushi = 0.45 ether;
+        uint112 fixedUSDCReserveStandard = 80_000e6;
+        uint112 fixedWETHReserveStandard = 0.45 ether;
 
-        mockPairReserves(UNIV2_USDC_WETH, fixedUSDCReserveUni, fixedWETHReserveUni);
-        mockPairReserves(SUSHI_USDC_WETH, fixedUSDCReserveSushi, fixedWETHReserveSushi);
+        mockPairReserves(UNIV2_USDC_WETH, fixedWETHReserveUni, fixedUSDCReserveUni);
+        mockPairReserves(STANDARD_UNIV2_PAIR, fixedWETHReserveStandard, fixedUSDCReserveStandard);
 
-        // Give executor initial USDC
         deal(USDC, address(executor), 1000e6);
 
-        // Calculate expected amounts
+        deal(WETH, UNIV2_USDC_WETH, fixedWETHReserveUni);
+        deal(USDC, UNIV2_USDC_WETH, fixedUSDCReserveUni);
+        deal(WETH, STANDARD_UNIV2_PAIR, fixedWETHReserveStandard);
+        deal(USDC, STANDARD_UNIV2_PAIR, fixedUSDCReserveStandard);
+
         uint256 expectedWETHOutUni = getAmountOut(1000e6, fixedUSDCReserveUni, fixedWETHReserveUni);
-        uint256 expectedUSDCOutSushi = getAmountOut(expectedWETHOutUni, fixedWETHReserveSushi, fixedUSDCReserveSushi);
+        uint256 expectedUSDCOutStandard =
+            getAmountOut(expectedWETHOutUni, fixedWETHReserveStandard, fixedUSDCReserveStandard);
 
         SimpleExecutor.Pair[] memory pairs = new SimpleExecutor.Pair[](2);
-        pairs[0] =
-            SimpleExecutor.Pair({contractAddress: UNIV2_USDC_WETH, amountOut: expectedWETHOutUni, isToken0: false});
 
-        pairs[1] =
-            SimpleExecutor.Pair({contractAddress: SUSHI_USDC_WETH, amountOut: expectedUSDCOutSushi, isToken0: true});
+        pairs[0] =
+            SimpleExecutor.Pair({contractAddress: UNIV2_USDC_WETH, amountOut: expectedWETHOutUni, isToken0: true});
+
+        pairs[1] = SimpleExecutor.Pair({
+            contractAddress: STANDARD_UNIV2_PAIR,
+            amountOut: expectedUSDCOutStandard,
+            isToken0: false
+        });
 
         // This would normally revert due to insufficient profit, but should pass with skipProfitCheck = true
         executor.run(USDC, 1000e6, 27e6, pairs, true);

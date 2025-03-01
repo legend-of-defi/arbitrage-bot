@@ -39,7 +39,7 @@ sol!(
 /// # Panics
 /// * If application context creation fails
 #[allow(dead_code)]
-pub async fn read_pairs_v2_by_range(
+pub async fn fetch_pairs_v2_by_range(
     factory: Address,
     from: U256,
     to: U256,
@@ -79,7 +79,7 @@ pub async fn read_pairs_v2_by_range(
 /// # Panics
 /// * If application context creation fails
 /// * If database connection fails
-pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), eyre::Report> {
+pub async fn fetch_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), eyre::Report> {
     let context = AppContext::new().await.expect("Failed to create context");
     let mut conn = context.conn;
     let provider = context.base_provider;
@@ -105,7 +105,7 @@ pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), 
 
         // Process single batch
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-        let pairs = match read_pairs_v2_by_range(factory, start, end).await {
+        let pairs = match fetch_pairs_v2_by_range(factory, start, end).await {
             Ok(pairs) => pairs,
             Err(e) => {
                 println!("Error fetching pairs for range {start} to {end}: {e}");
@@ -168,7 +168,7 @@ pub async fn read_all_pairs_v2(factory: Address, batch_size: u64) -> Result<(), 
 /// * If contract call to get reserves fails
 /// * If batch request contract initialization fails
 #[allow(dead_code)]
-pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
+pub async fn fetch_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
     let provider = create_http_provider().await.unwrap();
     let uniswap_v2_batch_request = IUniswapV2BatchRequest::new(
         address!("0x72D6545d3F45F20754F66a2B99fc1A4D75BFEf5c"),
@@ -203,7 +203,7 @@ pub async fn read_reserves_by_range(pairs: Vec<Address>) -> Vec<Reserves> {
 /// * If contract calls fail
 /// * If pair addresses cannot be parsed
 #[allow(dead_code)]
-pub async fn load_all_pools(batch_size: usize) -> HashSet<Pool> {
+pub async fn fetch_all_pools(batch_size: usize) -> HashSet<Pool> {
     let mut context = AppContext::new().await.expect("app context");
     let mut pools = PairService::load_all_pools(&mut context.conn);
 
@@ -218,7 +218,7 @@ pub async fn load_all_pools(batch_size: usize) -> HashSet<Pool> {
             .collect();
 
         // Process single batch
-        let reserves = read_reserves_by_range(addresses).await;
+        let reserves = fetch_reserves_by_range(addresses).await;
 
         for (i, pool) in pool.iter().enumerate() {
             let new_reserves = &reserves[i];
