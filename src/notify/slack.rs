@@ -60,7 +60,7 @@ impl SlackNotifier {
     }
 
     pub async fn send_error(&self, error: &str) -> Result<()> {
-        self.send_to(&format!(":warning: Error: {}", error), "#fly-errors")
+        self.send_to(&format!(":warning: Error: {error}"), "#fly-errors")
             .await
     }
 }

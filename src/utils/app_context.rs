@@ -7,26 +7,39 @@
 //! - Base Network (local via WebSocket and remote via Alchemy)
 
 use crate::utils::{db_connect::establish_connection, signer::Signer};
+use alloy::providers::fillers::{
+    BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
+};
+use alloy::providers::{Identity, RootProvider};
 use diesel::PgConnection;
-use eyre::{Error, Result};
+use eyre::{Error, Report, Result};
+use log::info;
 use std::env;
 
 use alloy::{
     network::Ethereum,
-    providers::{Provider, ProviderBuilder, RootProvider, WsConnect},
+    providers::{ProviderBuilder, WsConnect},
 };
 use url::Url;
 
-/// Application context holding shared network providers.
-///
-/// This struct maintains connections to blockchain networks,
-/// providing both local and remote access to the Base network.
-#[allow(dead_code)]
+// There has to be a better way to do this
+type EthereumProvider = FillProvider<
+    JoinFill<
+        Identity,
+        JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+    >,
+    RootProvider,
+    Ethereum,
+>;
+
+/// Application context holding shared network providers and connections.
 pub struct AppContext {
-    /// Base network connection (either local or remote)
-    pub base_provider: RootProvider<Ethereum>,
-    /// Database connection
-    pub conn: PgConnection,
+    /// Base network provider (local or remote)
+    pub base_provider: EthereumProvider,
+    /// WebSocket URL for Base network
+    pub base_provider_websocket_url: String,
+    /// `PostgreSQL` database connection
+    pub pg_connection: PgConnection,
     /// Transaction signer
     pub signer: Signer,
 }
@@ -40,71 +53,42 @@ impl AppContext {
     /// # Errors
     /// * If any of the provider connections fail
     /// * If required environment variables are missing
-    #[allow(dead_code)]
     pub async fn new() -> Result<Self, Error> {
+        // Create base provider using the existing method
+        let base_provider = Self::create_new_provider().await?;
+
         Ok(Self {
-            base_provider: Self::base_provider().await?,
-            conn: establish_connection()?,
+            base_provider,
+            base_provider_websocket_url: Self::base_provider_websocket_url(),
+            pg_connection: establish_connection()?,
             signer: Signer::new("/tmp/fly.sock"),
         })
     }
 
-    /// Creates a connection to Base network via Alchemy.
-    ///
-    /// # Returns
-    /// * `Result<RootProvider<Ethereum>, Error>` - The provider
-    ///
-    /// # Environment Variables
-    /// * `FLY_ALCHEMY_API_KEY` - Alchemy API key for Base network access
-    ///
-    /// # Errors
-    /// * If `FLY_ALCHEMY_API_KEY` environment variable is not set
-    /// * If URL parsing fails
-    /// * If provider initialization fails
-    #[allow(dead_code)]
-    pub fn base_remote() -> Result<RootProvider<Ethereum>, Error> {
-        let api_key = env::var("FLY_ALCHEMY_API_KEY")
-            .map_err(|_| Error::msg("FLY_ALCHEMY_API_KEY must be set"))?;
-
-        let url = Url::parse(&format!("https://base-mainnet.g.alchemy.com/v2/{api_key}"))?;
-        let provider = ProviderBuilder::new().on_http(url);
-        Ok((*provider.root()).clone())
+    pub fn base_provider_websocket_url() -> String {
+        "ws://localhost:8546".to_string()
     }
 
-    /// Creates a connection to a local Base node via WebSocket.
+    /// Creates a new provider based on environment
+    ///
+    /// This returns a concrete provider type suitable for contract calls.
     ///
     /// # Returns
-    /// * `Result<RootProvider<Ethereum>, Error>` - The provider
-    ///
-    /// # Path
-    /// Connects to WebSocket at `ws://localhost:8546`
+    /// * `Result<impl Provider<Ethereum>, Report>` - The provider
     ///
     /// # Errors
-    /// * If WebSocket connection fails
+    /// * If connection fails
     /// * If provider initialization fails
-    #[allow(dead_code)]
-    pub async fn base_local_ws() -> Result<RootProvider<Ethereum>, Error> {
-        let ws = WsConnect::new("ws://localhost:8546");
-        let provider = ProviderBuilder::new().on_ws(ws).await?;
-        Ok((*provider.root()).clone())
-    }
-
-    /// Selects the appropriate Base provider based on environment.
-    ///
-    /// Uses remote Alchemy provider if FLY_ALCHEMY_API_KEY is set,
-    /// otherwise falls back to local WebSocket connection.
-    ///
-    /// # Returns
-    /// * `Result<RootProvider<Ethereum>, Error>` - The selected provider
-    ///
-    /// # Errors
-    /// * If the selected provider connection fails
-    #[allow(dead_code)]
-    pub async fn base_provider() -> Result<RootProvider<Ethereum>, Error> {
-        if env::var("FLY_ALCHEMY_API_KEY").is_ok() {
-            Self::base_remote()
+    pub async fn create_new_provider() -> Result<EthereumProvider, Report> {
+        if let Ok(api_key) = env::var("FLY_ALCHEMY_API_KEY") {
+            info!("Using remote provider with API key {}", api_key);
+            let url = Url::parse(&format!("https://base-mainnet.g.alchemy.com/v2/{api_key}"))?;
+            Ok(ProviderBuilder::new().on_http(url))
         } else {
-            Self::base_local_ws().await
+            let ws_url = Self::base_provider_websocket_url();
+            info!("Using WebSocket provider at {}", ws_url);
+            let ws = WsConnect::new(&ws_url);
+            Ok(ProviderBuilder::new().on_ws(ws).await?)
         }
     }
 }

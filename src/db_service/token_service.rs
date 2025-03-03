@@ -2,7 +2,6 @@ use crate::models::token::{NewToken, Token};
 use crate::schemas::tokens;
 use diesel::prelude::*;
 
-#[allow(dead_code)]
 pub struct TokenService;
 
 impl TokenService {
@@ -21,7 +20,6 @@ impl TokenService {
     /// # Panics
     /// * If database insertion fails
     /// * If token creation violates constraints
-    #[allow(dead_code)]
     pub fn create_token(
         conn: &mut PgConnection,
         address: &str,
@@ -44,7 +42,6 @@ impl TokenService {
     }
 
     // Read
-    #[allow(dead_code)]
     pub fn read_token(conn: &mut PgConnection, id: i32) -> Option<Token> {
         tokens::table
             .find(id)
@@ -53,7 +50,6 @@ impl TokenService {
             .ok()
     }
 
-    #[allow(dead_code)]
     pub fn read_token_by_address(conn: &mut PgConnection, address: &str) -> Option<Token> {
         tokens::table
             .filter(tokens::address.eq(address))
@@ -73,7 +69,6 @@ impl TokenService {
     /// # Panics
     /// * If database query fails
     /// * If token records cannot be loaded
-    #[allow(dead_code)]
     pub fn read_all_tokens(conn: &mut PgConnection) -> Vec<Token> {
         tokens::table
             .select(Token::as_select())
@@ -92,28 +87,21 @@ impl TokenService {
     /// # Panics
     /// * If database query fails
     /// * If join operation fails
-    #[allow(dead_code)]
     pub fn read_tokens_with_pairs_count(conn: &mut PgConnection) -> Vec<(Token, i64)> {
         use crate::schemas::pairs::dsl::{pairs, token0_id, token1_id};
 
         tokens::table
-            .left_join(
-                pairs.on(
-                    token0_id.eq(tokens::id)
-                    .or(token1_id.eq(tokens::id))
-                )
-            )
+            .left_join(pairs.on(token0_id.eq(tokens::id).or(token1_id.eq(tokens::id))))
             .group_by(tokens::all_columns)
             .select((
                 Token::as_select(),
-                diesel::dsl::sql::<diesel::sql_types::BigInt>("COALESCE(COUNT(*), 0)")
+                diesel::dsl::sql::<diesel::sql_types::BigInt>("COALESCE(COUNT(*), 0)"),
             ))
             .load(conn)
             .expect("Error loading tokens with pairs count")
     }
 
     // Update token info
-    #[allow(dead_code)]
     pub fn update_token_info(
         conn: &mut PgConnection,
         id: i32,
@@ -121,21 +109,15 @@ impl TokenService {
         name: Option<&str>,
     ) -> Option<Token> {
         diesel::update(tokens::table.find(id))
-            .set((
-                tokens::symbol.eq(symbol),
-                tokens::name.eq(name),
-            ))
+            .set((tokens::symbol.eq(symbol), tokens::name.eq(name)))
             .returning(Token::as_returning())
             .get_result(conn)
             .ok()
     }
 
     // Delete
-    #[allow(dead_code)]
     pub fn delete_token(conn: &mut PgConnection, id: i32) -> bool {
-        diesel::delete(tokens::table.find(id))
-            .execute(conn)
-            .is_ok()
+        diesel::delete(tokens::table.find(id)).execute(conn).is_ok()
     }
 
     /// Get or create token with optional update
@@ -162,7 +144,7 @@ impl TokenService {
     ) -> Result<Token, diesel::result::Error> {
         if let Ok(mut token) = tokens::table
             .filter(tokens::address.eq(address))
-            .first::<Token>(conn) 
+            .first::<Token>(conn)
         {
             if symbol.is_some() || name.is_some() {
                 token = diesel::update(tokens::table.find(token.id))

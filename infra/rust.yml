@@ -1,69 +1,10 @@
 ---
 - name: Install system packages
-  hosts: bee
+  hosts: fly
   become: true
   vars:
     rust_version: "1.84.0"
   tasks:
-    - name: Upgrade all packages
-      ansible.builtin.apt:
-        upgrade: dist
-        force_apt_get: true
-      register: upgrade_result
-      retries: 3
-      delay: 5
-      until: upgrade_result is success
-
-    - name: Install packages
-      ansible.builtin.apt:
-        name:
-          - libssl-dev
-          - pkg-config
-          - openssl
-          - build-essential
-          - zlib1g-dev
-          - libpq-dev
-          - git
-          - curl
-          - atop
-          - glances
-          - linux-tools-common
-          - linux-headers-generic
-          - sshfs
-          - direnv
-          - jq
-          - acl
-          - pq
-          - unzip
-          - ca-certificates
-          - curl
-          - gnupg
-          - apt-transport-https
-
-        state: present
-        update_cache: true
-
-    - name: Configure sysctl for performance monitoring
-      ansible.posix.sysctl:
-        name: kernel.perf_event_paranoid
-        value: -1
-        state: present
-        sysctl_file: /etc/sysctl.conf
-        reload: true
-
-    - name: Configure sysctl for kernel kptr_restrict
-      ansible.posix.sysctl:
-        name: kernel.kptr_restrict
-        value: 0
-        state: present
-        sysctl_file: /etc/sysctl.conf
-        reload: true
-
-    - name: Apply sysctl changes
-      ansible.builtin.service:
-        name: systemd-sysctl
-        state: restarted
-
     - name: Download rustup installer
       ansible.builtin.get_url:
         url: https://sh.rustup.rs
@@ -80,10 +21,11 @@
       ansible.builtin.copy:
         dest: /etc/profile.d/rust.sh
         content: |
-          export CARGO_HOME=/usr/local/rust
+          export CARGO_HOME=$HOME/.cargo
           export RUSTUP_HOME=/opt/rustup
           export RUST_WRAPPER=sccache
-          export PATH=$CARGO_HOME/bin:$PATH
+          export PATH=/usr/local/rust/bin:$PATH
+          export DATABASE_URL=postgresql://fly@localhost?host=/var/run/postgresql
         mode: '0644'
 
     - name: Verify Rust and Cargo installation
@@ -97,10 +39,12 @@
 
     - name: Install cargo-make
       ansible.builtin.shell: |
-        source /etc/profile.d/rust.sh
-        cargo install cargo-make
+        CARGO_HOME=/usr/local/rust RUSTUP_HOME=/opt/rustup /usr/local/rust/bin/cargo install cargo-make
       args:
         creates: "/usr/local/rust/bin/cargo-make"
+        executable: /bin/bash
+      environment:
+        PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
 
     - name: Install cargo flamegraph
       ansible.builtin.shell: |
@@ -141,6 +85,7 @@
         creates: "/usr/local/rust/bin/cargo-script"
       environment:
         PATH: "/usr/local/rust/bin:{{ ansible_env.PATH }}"
+
     - name: Create global foundry directory
       ansible.builtin.file:
         path: "{{ item }}"
@@ -207,4 +152,3 @@
       changed_when: false
       args:
         executable: /bin/bash
-

@@ -1,6 +1,6 @@
 ---
 - name: Setup /fly directory and configure fly user and service
-  hosts: bee
+  hosts: fly
   become: true
   tasks:
     - name: Create fly system user

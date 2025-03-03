@@ -8,31 +8,6 @@ ethereum_nodes:
       ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
       ansible_become: true
       ansible_become_method: sudo
-    bee:
-      ansible_host: 38.86.135.120
-      ansible_user: stas
-      ansible_python_interpreter: /usr/bin/python3
-      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
-      ansible_become: true
-      ansible_become_method: sudo
-    # latitude box - 3rd time a charm?
-    lat:
-      ansible_host: 67.213.115.5
-      ansible_user: ubuntu
-      ansible_python_interpreter: /usr/bin/python3
-      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
-      ansible_become: true
-      ansible_become_method: sudo
-  children:
-    active:
-      hosts:
-        fly:
-    staging:
-      hosts:
-        bee:
-    testing:
-      hosts:
-        lat:
   vars:
     slack_oauth_token: "{{ lookup('env', 'SLACK_OAUTH_TOKEN') }}"
     basescan_api_key: "{{ lookup('env', 'BASESCAN_API_KEY') }}"

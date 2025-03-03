@@ -1,6 +1,6 @@
 ---
 - name: Install and configure Geth
-  hosts: bee
+  hosts: fly
   become: true
   vars:
     external_ip: "{{ ansible_host }}"

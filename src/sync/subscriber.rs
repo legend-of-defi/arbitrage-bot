@@ -1,10 +1,13 @@
-use serde_json::{json, Value};
-use std::error::Error;
-use tokio_tungstenite::tungstenite::protocol::Message;
-use futures::StreamExt;
 use chrono::Local;
+use eyre::Error;
+use futures::StreamExt;
+use serde_json::{json, Value};
+use tokio_tungstenite::tungstenite::protocol::Message;
 
-const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+use crate::utils::app_context::AppContext;
+
+const UNISWAP_V2_SYNC_EVENT_TOPIC_HASH: &str =
+    "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
 
 /// Subscribes to sync events from the network
 ///
@@ -21,7 +24,7 @@ const SYNC_TOPIC: &str = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b
 /// * If received message format is invalid
 /// * If WebSocket stream terminates unexpectedly
 /// * If message sending fails
-pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
+pub async fn subscribe_to_sync(ctx: &AppContext) -> Result<(), Error> {
     let subscribe_request = json!({
         "jsonrpc": "2.0",
         "method": "eth_subscribe",
@@ -29,7 +32,8 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
         "id": 1
     });
 
-    let mut ws_stream = crate::utils::providers::send_ws_request(subscribe_request.to_string()).await?;
+    let mut ws_stream =
+        crate::utils::providers::send_ws_request(ctx, subscribe_request.to_string()).await?;
 
     while let Some(msg) = ws_stream.next().await {
         let text = match msg {
@@ -47,19 +51,27 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
         };
 
         // Get params or continue
-        let Some(params) = json.get("params") else { continue };
+        let Some(params) = json.get("params") else {
+            continue;
+        };
 
         // Get result or continue
-        let Some(result) = params.get("result") else { continue };
+        let Some(result) = params.get("result") else {
+            continue;
+        };
 
         // Get topics or continue
-        let Some(topics) = result.get("topics") else { continue };
+        let Some(topics) = result.get("topics") else {
+            continue;
+        };
 
         // Get first topic or continue
-        let Some(first_topic) = topics.as_array().and_then(|t| t.first()) else { continue };
+        let Some(first_topic) = topics.as_array().and_then(|t| t.first()) else {
+            continue;
+        };
 
         // Check if it matches our sync topic
-        if first_topic.as_str() != Some(SYNC_TOPIC) {
+        if first_topic.as_str() != Some(UNISWAP_V2_SYNC_EVENT_TOPIC_HASH) {
             continue;
         }
 
@@ -80,11 +92,10 @@ pub async fn subscribe_to_sync() -> Result<(), Box<dyn Error>> {
         // Decode the reserve data
         if let Some(data) = result.get("data").and_then(|d| d.as_str()) {
             let data = data.trim_start_matches("0x");
-            if data.len() >= 128 {  // 2 * 32 bytes in hex
-                let reserve0 = u128::from_str_radix(&data[0..64], 16)
-                    .unwrap_or_default();
-                let reserve1 = u128::from_str_radix(&data[64..128], 16)
-                    .unwrap_or_default();
+            if data.len() >= 128 {
+                // 2 * 32 bytes in hex
+                let reserve0 = u128::from_str_radix(&data[0..64], 16).unwrap_or_default();
+                let reserve1 = u128::from_str_radix(&data[64..128], 16).unwrap_or_default();
 
                 println!("💰 Reserve0: {reserve0}");
                 println!("💰 Reserve1: {reserve1}");
@@ -109,7 +120,7 @@ mod tests {
     fn test_sync_topic_constant() {
         // Verify the sync topic hash is correct for Uniswap V2 Sync events
         assert_eq!(
-            SYNC_TOPIC,
+            UNISWAP_V2_SYNC_EVENT_TOPIC_HASH,
             "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1"
         );
     }
@@ -143,7 +154,10 @@ mod tests {
         let topics = result.get("topics").unwrap();
         let first_topic = topics.as_array().unwrap().first().unwrap();
 
-        assert_eq!(first_topic.as_str().unwrap(), SYNC_TOPIC);
+        assert_eq!(
+            first_topic.as_str().unwrap(),
+            UNISWAP_V2_SYNC_EVENT_TOPIC_HASH
+        );
 
         // Test data parsing
         let data = result.get("data").unwrap().as_str().unwrap();
@@ -152,8 +166,8 @@ mod tests {
         let reserve0 = u128::from_str_radix(&data[0..64], 16).unwrap();
         let reserve1 = u128::from_str_radix(&data[64..128], 16).unwrap();
 
-        assert_eq!(reserve0, 4943838247324222824_u128);
-        assert_eq!(reserve1, 229068893442940125718688914_u128);
+        assert_eq!(reserve0, 4_943_838_247_324_222_824_u128);
+        assert_eq!(reserve1, 229_068_893_442_940_125_718_688_914_u128);
     }
 
     // Mock test for WebSocket connection

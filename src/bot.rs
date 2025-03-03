@@ -9,10 +9,10 @@ pub struct Bot {
 }
 
 impl Bot {
-    pub fn new(context: AppContext) -> Self {
+    pub fn new(ctx: AppContext) -> Self {
         let processor = Arc::new(TradeProcessor::new());
         Self {
-            context: Mutex::new(context),
+            context: Mutex::new(ctx),
             mempool_monitor: Mutex::new(MempoolMonitor::new(processor)),
         }
     }

@@ -10,7 +10,8 @@ fern = "0.7.1"
 log = "0.4.25"
 chrono = "0.4.39"
 serde_json = "1"
-diesel = { version = "2.2.7", features = ["postgres"] }
+diesel = { version = "2.2.7", features = ["postgres", "r2d2"] }
+r2d2 = "0.8.10"
 fastrand = "2.0.1"
 alloy = { version = "0.11.1", features = ["full"] }
 futures = "0.3.31"
@@ -23,16 +24,11 @@ clap = { version = "4.0", features = ["derive"] }
 tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 derive_more = { version = "1.0.0", features = ["display"] }
 reqwest = { version = "0.11", features = ["json"] }
+itertools = "0.14.0"
+
 [dev-dependencies]
 criterion = "0.5"
 
 [[bench]]
 name = "arb"
 harness = false
-
-[lints.clippy]
-all = { level = "warn", priority = -1 }
-pedantic = { level = "warn", priority = 0 }
-nursery = { level = "warn", priority = 0 }
-cargo_common_metadata = { level = "allow", priority = 1 }
-multiple_crate_versions = { level = "allow", priority = 1 }

@@ -1,6 +1,6 @@
 ---
 - name: Docker Installation and Configuration
-  hosts: bee
+  hosts: fly
   become: true
   tasks:
     - name: Install required system packages

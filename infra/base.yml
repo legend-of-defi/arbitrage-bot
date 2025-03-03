@@ -1,6 +1,6 @@
 ---
 - name: Install and configure Base node
-  hosts: bee
+  hosts: fly
   become: true
   tasks:
     - name: Create base system user

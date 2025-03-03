@@ -1,23 +1,21 @@
 #![allow(dead_code, unused_variables)]
 
-use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
 
-use crate::arb::market::Market;
-use crate::arb::token::TokenId;
-use crate::bootstrap::{fetch_all_pools, fetch_all_pairs_v2};
+use crate::arb::world::World;
+use crate::bootstrap::{fetch_all_pairs_v2, fetch_all_pools};
 use crate::bot::Bot;
-use crate::config::Config;
 use crate::db_service::PairService;
 use crate::notify::SlackNotifier;
+use crate::sync::subscriber::subscribe_to_sync;
 use crate::utils::app_context::AppContext;
-use crate::utils::db_connect::establish_connection;
 use crate::utils::logger::setup_logger;
-use crate::utils::providers::create_http_provider;
-use alloy::primitives::{address, U256};
+use alloy::primitives::address;
 use clap::{Parser, Subcommand};
-use fly::sync::subscriber::subscribe_to_sync;
+use eyre::{Error, Result};
+use log::info;
+use fly::bootstrap::start_pool_monitoring;
 
 mod arb;
 mod bootstrap;
@@ -28,6 +26,7 @@ mod db_service;
 mod models;
 mod notify;
 mod schemas;
+mod sync;
 mod utils;
 
 #[derive(Parser)]
@@ -44,102 +43,86 @@ enum Commands {
     /// Skip batch processing and start the bot
     Start,
     /// Send slack message
-    Slack {
-        message: String,
-    },
+    Slack { message: String },
     /// Send slack error message
-    SlackError {
-        message: String,
-    },
+    SlackError { message: String },
 }
 
-async fn process_batches() -> Result<(), Box<dyn std::error::Error>> {
-    let _config = Config::from_env();
-    setup_logger().expect("Failed to set up logger");
-    println!(
+async fn run_default_behavior(mut ctx: AppContext) -> Result<(), Error> {
+    info!(
         "Server Started with DATABASE_URL: {}",
         env::var("DATABASE_URL").unwrap()
     );
 
-    let _provider = create_http_provider().await?;
-    let _ = fetch_all_pairs_v2(address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6"), 3000).await;
-
-    let mut conn = establish_connection()?;
+    let uniswap_v2_factory_base = address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6");
+    fetch_all_pairs_v2(&mut ctx, uniswap_v2_factory_base, 750).await?;
 
     // Display all pairs with token information
-    let pairs = PairService::read_all_pairs(&mut conn);
+    let pairs = PairService::read_all_pairs(&mut ctx.pg_connection);
 
     println!("\nFound {} pairs", pairs.len());
 
     println!("Database connected successfully!");
 
-    let context = AppContext::new().await.expect("Failed to create context");
-
-    let pools = fetch_all_pools(3000).await;
+    let pools = fetch_all_pools(&mut ctx, 1).await;
     let num_pairs = pools.len();
-    let mut balances = HashMap::with_capacity(num_pairs);
 
-    // Tether Address on base (we can update it later)
-    balances.insert(
-        TokenId::from("0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2"),
-        U256::from(0),
-    );
-    let _market = Market::new(&pools, balances);
+    let _world = World::new(&pools);
 
-    subscribe_to_sync().await?;
+    start_pool_monitoring(&mut ctx, 300)?;
 
-    Ok(())
-}
+    subscribe_to_sync(&ctx).await?;
 
-async fn run_default_behavior() -> Result<(), Box<dyn std::error::Error>> {
-    // Process batches first
-    process_batches().await?;
-
-    // Then start the bot
-    let context = AppContext::new().await.expect("Failed to create context");
-    let bot = Arc::new(Bot::new(context));
+    let bot = Arc::new(Bot::new(ctx));
     start_bot(bot).await;
 
     Ok(())
 }
 
-async fn start_bot_only() -> Result<(), Box<dyn std::error::Error>> {
-    let _config = Config::from_env();
-    setup_logger().expect("Failed to set up logger");
+async fn start_bot_only(ctx: AppContext) -> Result<(), Error> {
     println!("Starting bot without batch processing...");
 
-    let context = AppContext::new().await.expect("Failed to create context");
-    let bot = Arc::new(Bot::new(context));
+    let bot = Arc::new(Bot::new(ctx));
     start_bot(bot).await;
 
     Ok(())
 }
 
-async fn send_slack_message(message: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn send_slack_message(message: &str) -> Result<(), Error> {
     let notifier = SlackNotifier::new()?;
     notifier.send(message).await?;
     Ok(())
 }
 
-async fn send_slack_error_message(message: &str) -> Result<(), Box<dyn std::error::Error>> {
+async fn send_slack_error_message(message: &str) -> Result<(), Error> {
     let notifier = SlackNotifier::new()?;
     notifier.send_error(message).await?;
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = Cli::parse();
+async fn process_batches(mut ctx: AppContext) -> Result<(), Error> {
+    let uniswap_v2_factory_base = address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6");
+    fetch_all_pairs_v2(&mut ctx, uniswap_v2_factory_base, 750).await?;
+    println!("Batch processing completed successfully");
+    Ok(())
+}
 
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    setup_logger().expect("Failed to set up logger");
+
+    let ctx = AppContext::new().await?;
+
+    let cli = Cli::parse();
     match cli.command {
         Some(Commands::Batches) => {
             // Only process batches, don't start the bot
             println!("Processing batches only...");
-            process_batches().await?;
+            process_batches(ctx).await?;
         }
         Some(Commands::Start) => {
             // Skip batch processing and just start the bot
-            start_bot_only().await?;
+            start_bot_only(ctx).await?;
         }
         Some(Commands::Slack { message }) => {
             send_slack_message(&message).await?;
@@ -147,9 +130,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(Commands::SlackError { message }) => {
             send_slack_error_message(&message).await?;
         }
-        None => {
-            // Default behavior: process batches then start the bot
-            run_default_behavior().await?;
+        none => {
+            // Default behavior when no subcommand is provided
+            run_default_behavior(ctx).await?;
         }
     }
 

@@ -3,15 +3,10 @@ use diesel::prelude::*;
 #[diesel(table_name = crate::schemas::factories)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Factory {
-    #[allow(dead_code)]
     pub id: i32,
-    #[allow(dead_code)]
     pub name: String,
-    #[allow(dead_code)]
     pub address: String,
-    #[allow(dead_code)]
     pub fee: i32,
-    #[allow(dead_code)]
     pub version: String,
 }
 
@@ -23,4 +18,3 @@ pub struct NewFactory {
     pub fee: i32,
     pub version: String,
 }
-

@@ -20,7 +20,6 @@ pub struct Wallet {
     /// The wallet's address
     address: Address,
     /// The ERC20 token contract address being tracked
-    #[allow(dead_code)]
     token_address: Address,
     /// The name of the ERC20 token
     #[allow(dead_code)]
@@ -56,7 +55,6 @@ impl Wallet {
     /// * If `FLY_BASE_WALLET_ADDRESS` environment variable is not set
     /// * If wallet address is invalid
     /// * If token name query fails
-    #[allow(dead_code)]
     pub async fn new(
         provider: RootProvider<Ethereum>,
         token_address: Address,
@@ -86,7 +84,6 @@ impl Wallet {
     ///
     /// # Errors
     /// * If balance query to ERC20 contract fails
-    #[allow(dead_code)]
     pub async fn update_balance(&mut self) -> Result<(), Error> {
         let erc20 = ERC20::new(self.token_address, self.provider.clone());
         self.balance = Some(erc20.balanceOf(self.address).call().await?.balance);

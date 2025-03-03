@@ -1,6 +1,6 @@
 ---
 - name: Setup Prysm Beacon Node
-  hosts: bee
+  hosts: fly
   become: true
   vars:
     prysm_version: "v4.2.1"

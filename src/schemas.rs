@@ -116,8 +116,4 @@ diesel::table! {
 
 diesel::joinable!(pairs -> factories (factory_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    factories,
-    pairs,
-    tokens,
-);
+diesel::allow_tables_to_appear_in_same_query!(factories, pairs, tokens,);

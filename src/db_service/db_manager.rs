@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::db_service::{FactoryService, PairService, TokenService};
 use crate::models::{
     factory::{Factory, NewFactory},
@@ -27,7 +28,6 @@ impl DbManager {
     /// * If database transaction fails
     /// * If factory/token/pair operations fail
     /// * If database constraints are violated
-    #[allow(dead_code)]
     pub fn save_dex_info(
         conn: &mut PgConnection,
         factory_info: &NewFactory,
@@ -80,25 +80,82 @@ impl DbManager {
     /// * If any individual save operation fails
     /// * If database transaction fails
     /// * If database constraints are violated
-    #[allow(dead_code)]
     pub fn batch_save_dex_info(
         conn: &mut PgConnection,
         dex_infos: Vec<(NewFactory, NewToken, NewToken, String)>,
     ) -> Vec<(Factory, Token, Token, Pair)> {
-        let mut results = Vec::new();
+        // Execute everything in a single transaction
+        conn.transaction(|conn| {
+            let mut results = Vec::with_capacity(dex_infos.len());
 
-        for (factory, token0, token1, pair_address) in dex_infos {
-            match Self::save_dex_info(conn, &factory, &token0, &token1, &pair_address) {
-                Ok(result) => results.push(result),
-                Err(e) => println!("Error saving dex info: {e:?}"),
+            for (factory, token0, token1, pair_address) in dex_infos {
+                // Reuse the existing save_dex_info logic, but without the transaction wrapper
+                // since we're already in a transaction
+
+                let factory_result = FactoryService::read_or_create(
+                    conn,
+                    &factory.address,
+                    &factory.name,
+                    factory.fee,
+                    &factory.version,
+                );
+
+                if let Err(e) = factory_result {
+                    println!("Error saving factory: {:?}", e);
+                    continue;
+                }
+                let factory_record = factory_result.unwrap();
+
+                let token0_result = TokenService::read_or_create(
+                    conn,
+                    &token0.address,
+                    token0.symbol.as_deref(),
+                    token0.name.as_deref(),
+                    token0.decimals,
+                );
+
+                if let Err(e) = token0_result {
+                    println!("Error saving token0: {:?}", e);
+                    continue;
+                }
+                let token0_record = token0_result.unwrap();
+
+                let token1_result = TokenService::read_or_create(
+                    conn,
+                    &token1.address,
+                    token1.symbol.as_deref(),
+                    token1.name.as_deref(),
+                    token1.decimals,
+                );
+
+                if let Err(e) = token1_result {
+                    println!("Error saving token1: {:?}", e);
+                    continue;
+                }
+                let token1_record = token1_result.unwrap();
+
+                let pair_result = PairService::read_or_create(
+                    conn,
+                    &pair_address,
+                    token0_record.id,
+                    token1_record.id,
+                    factory_record.id
+                );
+
+                if let Err(e) = pair_result {
+                    println!("Error saving pair: {:?}", e);
+                    continue;
+                }
+                let pair_record = pair_result.unwrap();
+
+                results.push((factory_record, token0_record, token1_record, pair_record));
             }
-        }
 
-        results
+            Ok(results)
+        }).unwrap_or_default()
     }
 
     // Helper functions
-    #[allow(dead_code)]
     fn read_or_create_factory(
         conn: &mut PgConnection,
         info: NewFactory,
@@ -115,7 +172,6 @@ impl DbManager {
             })
     }
 
-    #[allow(dead_code)]
     fn read_or_create_token(
         conn: &mut PgConnection,
         info: NewToken,
@@ -141,7 +197,6 @@ impl DbManager {
         }
     }
 
-    #[allow(dead_code)]
     fn read_or_create_pair(
         conn: &mut PgConnection,
         address: &str,

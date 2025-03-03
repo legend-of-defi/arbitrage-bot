@@ -1,22 +1,20 @@
-use alloy::primitives::U256;
-use crate::models::token::NewToken;
 use super::UniswapQuery;
+use crate::models::token::NewToken;
+use alloy::primitives::U256;
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct TokenInfo {
     pub address: String,
     pub name: String,
     pub symbol: String,
-    pub decimals: i32
+    pub decimals: i32,
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct PairInfo {
     pub address: String,
     pub token0: NewToken,
-    pub token1: NewToken
+    pub token1: NewToken,
 }
 
 impl From<UniswapQuery::PairInfo> for PairInfo {
@@ -43,8 +41,6 @@ impl From<UniswapQuery::PairInfo> for PairInfo {
     }
 }
 
-
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Reserves {
     pub reserve0: U256,

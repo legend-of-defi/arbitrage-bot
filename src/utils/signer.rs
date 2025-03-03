@@ -1,4 +1,3 @@
-use eyre::{Error, Result};
 /// Interface for fly executor - a separate process that handles transaction signing
 ///
 /// This (core) service will prepare a bundle of transactions and send them to the signer
@@ -7,6 +6,7 @@ use eyre::{Error, Result};
 ///
 /// This is the implementation of the Privilege Separation Principle.
 use alloy::primitives::{Address, U256};
+use eyre::{Error, Result};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
@@ -35,7 +35,6 @@ impl Signer {
     ///
     /// # Errors
     /// * If socket path is invalid
-    #[must_use]
     pub fn new(socket_path: &str) -> Self {
         Self {
             stream: None,

@@ -37,7 +37,6 @@ impl Config {
     ///
     /// # Returns
     /// Returns `Config` with values from environment variables or defaults
-    #[must_use]
     pub fn from_env() -> Self {
         let defaults = Self::defaults();
 
@@ -50,7 +49,6 @@ impl Config {
 
     /// Create a test configuration
     #[cfg(test)]
-    #[must_use]
     pub fn test_config() -> Self {
         Self::defaults()
     }

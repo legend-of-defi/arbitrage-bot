@@ -2,7 +2,6 @@ use crate::models::factory::{Factory, NewFactory};
 use crate::schemas::factories;
 use diesel::prelude::*;
 
-#[allow(dead_code)]
 pub struct FactoryService;
 
 impl FactoryService {
@@ -21,7 +20,6 @@ impl FactoryService {
     /// # Panics
     /// * If database insertion fails
     /// * If factory creation violates constraints
-    #[allow(dead_code)]
     pub fn create_factory(
         conn: &mut PgConnection,
         name: &str,
@@ -44,7 +42,6 @@ impl FactoryService {
     }
 
     /// Read factory by ID
-    #[allow(dead_code)]
     pub fn read_factory(conn: &mut PgConnection, id: i32) -> Option<Factory> {
         factories::table
             .find(id)
@@ -64,7 +61,6 @@ impl FactoryService {
     /// # Panics
     /// * If database query fails
     /// * If factory records cannot be loaded
-    #[allow(dead_code)]
     pub fn read_all_factories(conn: &mut PgConnection) -> Vec<Factory> {
         factories::table
             .select(Factory::as_select())
@@ -73,7 +69,6 @@ impl FactoryService {
     }
 
     /// Update Factory
-    #[allow(dead_code)]
     pub fn update_factory(
         conn: &mut PgConnection,
         id: i32,
@@ -81,23 +76,19 @@ impl FactoryService {
         fee: i32,
     ) -> Option<Factory> {
         diesel::update(factories::table.find(id))
-            .set((
-                factories::name.eq(name),
-                factories::fee.eq(fee),
-            ))
+            .set((factories::name.eq(name), factories::fee.eq(fee)))
             .returning(Factory::as_returning())
             .get_result(conn)
             .ok()
     }
 
     /// Delete Factory
-    #[allow(dead_code)]
     pub fn delete_factory(conn: &mut PgConnection, id: i32) -> bool {
         diesel::delete(factories::table.find(id))
             .execute(conn)
             .is_ok()
     }
-    
+
     /// Get or create a factory
     ///
     /// # Arguments
@@ -114,7 +105,6 @@ impl FactoryService {
     /// * If database operations fail
     /// * If factory creation violates constraints
     /// * If factory lookup fails
-    #[allow(dead_code)]
     pub fn read_or_create(
         conn: &mut PgConnection,
         address: &str,
@@ -139,4 +129,3 @@ impl FactoryService {
             })
     }
 }
-

@@ -10,7 +10,6 @@ const TRADE_CHANNEL_SIZE: usize = 1000; // Adjust size as needed
 pub struct MempoolMonitor {
     // is_running: Arc<Mutex<bool>>,
     // filter: TradeFilter,
-    #[allow(dead_code)]
     processor: Arc<TradeProcessor>,
 }
 
@@ -36,7 +35,6 @@ impl TradeProcessor {
         Self { tx }
     }
 
-    #[allow(dead_code)]
     async fn send_trade(&self, trade: Value) {
         if let Err(e) = self.tx.send(trade).await {
             eprintln!("Error sending trade to processor: {e}");
@@ -61,7 +59,6 @@ impl MempoolMonitor {
     }
 
     /// I image main bot loop to look something like this:
-    #[allow(dead_code)]
     async fn bot_loop(&self, _context: &mut AppContext) {
         loop {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;

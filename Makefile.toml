@@ -8,7 +8,7 @@ script = [
 [tasks.deploy]
 dependencies = ["build-release"]
 script = [
-    "sudo cp target/release/fly /usr/bin/fly",
+    "sudo scp target/release/fly fly:/usr/bin/fly",
     "sudo systemctl restart fly"
 ]
 

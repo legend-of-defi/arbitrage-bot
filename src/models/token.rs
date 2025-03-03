@@ -1,18 +1,13 @@
-use diesel::{Queryable, Selectable, Insertable};
+use diesel::{Insertable, Queryable, Selectable};
 
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = crate::schemas::tokens)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Token {
-    #[allow(dead_code)]
     pub id: i32,
-    #[allow(dead_code)]
     pub address: String,
-    #[allow(dead_code)]
     pub symbol: Option<String>,
-    #[allow(dead_code)]
     pub name: Option<String>,
-    #[allow(dead_code)]
     pub decimals: i32,
 }
 
@@ -39,7 +34,12 @@ impl NewToken {
     ///
     /// * Returns a new `NewToken` instance with sanitized `symbol` and `name` (if they were provided),
     ///   and the provided `address` and `decimals` values.
-    pub fn new(address: String, symbol: Option<String>, name: Option<String>, decimals: i32) -> Self {
+    pub fn new(
+        address: String,
+        symbol: Option<String>,
+        name: Option<String>,
+        decimals: i32,
+    ) -> Self {
         Self {
             address,
             symbol: symbol.map(|s| sanitize_string(&s)),
@@ -72,7 +72,7 @@ mod tests {
     fn test_sanitize_string() {
         // Create a raw byte vector with both a null byte and an invalid UTF-8 byte (0x80)
         let input_invalid_bytes = vec![
-            b'E', b't', b'h', b'e', b'\0', b'r', b'e', b'u', b'm', b'\x80'
+            b'E', b't', b'h', b'e', b'\0', b'r', b'e', b'u', b'm', b'\x80',
         ];
 
         // Convert the raw byte slice to a string using `from_utf8_lossy`, which handles invalid UTF-8
@@ -82,7 +82,7 @@ mod tests {
         let sanitized = sanitize_string(&input_invalid);
 
         // Check that the null byte is removed and invalid UTF-8 byte is replaced with "�"
-        assert_eq!(sanitized, "Ethereum�");  // Null byte removed, and invalid byte replaced with "�"
+        assert_eq!(sanitized, "Ethereum�"); // Null byte removed, and invalid byte replaced with "�"
     }
 
     // Test NewToken::new methodca
@@ -95,12 +95,7 @@ mod tests {
             decimals: 18,
         };
 
-        let new_token = NewToken::new(
-            token.address,
-            token.symbol,
-            token.name,
-            token.decimals,
-        );
+        let new_token = NewToken::new(token.address, token.symbol, token.name, token.decimals);
 
         // Verify that the sanitization worked
         assert_eq!(new_token.address, "0x1234");
@@ -121,12 +116,7 @@ mod tests {
             decimals: 6,
         };
 
-        let new_token = NewToken::new(
-            token.address,
-            token.symbol,
-            token.name,
-            token.decimals,
-        );
+        let new_token = NewToken::new(token.address, token.symbol, token.name, token.decimals);
 
         assert_eq!(new_token.address, "0x5678");
         assert_eq!(new_token.symbol, None); // No sanitization or modification needed

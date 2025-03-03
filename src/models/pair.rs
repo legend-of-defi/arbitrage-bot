@@ -4,12 +4,10 @@ use diesel::{Insertable, Queryable, Selectable};
 #[diesel(table_name = crate::schemas::pairs)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Pair {
-    #[allow(dead_code)]
     pub id: i32,
     pub address: String,
     pub token0_id: i32,
     pub token1_id: i32,
-    #[allow(dead_code)]
     pub factory_id: i32,
 }
 
@@ -21,4 +19,3 @@ pub struct NewPair {
     pub token1_id: i32,
     pub factory_id: i32,
 }
-

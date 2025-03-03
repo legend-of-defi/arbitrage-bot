@@ -26,38 +26,30 @@ pub type SwapIndex = usize;
 #[derive(Debug, Clone, Default)]
 pub struct Market {
     /// Our balances indexed by Token Address
-    #[allow(dead_code)]
     pub balances: HashMap<TokenId, U256>,
 
     /// Our tokens indexed by `TokenId`
-    #[allow(dead_code)]
     pub our_token_vec: Vec<TokenIndex>,
 
     /// Tokens indexed by `TokenId`
-    #[allow(dead_code)]
     pub token_vec: Vec<Token>,
 
     /// Address to `TokenId`
-    #[allow(dead_code)]
     pub token_map: HashMap<TokenId, TokenIndex>,
 
     /// Swaps indexed by `SwapId`
-    #[allow(dead_code)]
     pub swap_vec: Vec<SwapSide>,
 
     /// `SwapKey` to `SwapId`
-    #[allow(dead_code)]
     pub swap_map: HashMap<SwapId, SwapIndex>,
 
     // Adjacency list of TokenId (Vertex) to a list of SwapId (Edges)
-    #[allow(dead_code)]
     pub graph: Vec<Vec<SwapIndex>>,
 }
 
 impl Market {
     /// Create a new market from a set of pools loaded from the database
     /// Called at startup
-    #[allow(dead_code)]
     pub fn new(pools: &HashSet<Pool>, balances: HashMap<TokenId, U256>) -> Self {
         // Build token_vec with deduplication
         let mut token_set = HashSet::new();
@@ -124,7 +116,6 @@ impl Market {
 
     /// Update the market with new pool reserves and balances and return affected cycles
     /// Call this once per block with new pools and balances
-    #[allow(dead_code)]
     pub fn update(
         &mut self,
         new_pools: HashSet<Pool>,
@@ -140,7 +131,6 @@ impl Market {
         self.exploitable_cycles(cycles)
     }
 
-    #[allow(dead_code)]
     fn update_swaps(&mut self, updated_pools: HashSet<Pool>) -> Vec<SwapIndex> {
         let mut updated_swaps = Vec::new();
 
@@ -162,7 +152,6 @@ impl Market {
     }
 
     /// Find cycles that include at least one updated swap and at least one of our tokens
-    #[allow(dead_code)]
     fn updated_cycles(&self, updated_swaps: Vec<SwapIndex>) -> Vec<Cycle> {
         let mut cycles = Vec::new();
         let mut unique_cycles = HashSet::new();
@@ -199,7 +188,6 @@ impl Market {
             .collect()
     }
 
-    #[allow(dead_code)]
     fn profitable_cycles(cycles: Vec<Cycle>) -> Vec<Cycle> {
         cycles
             .into_iter()
@@ -207,7 +195,6 @@ impl Market {
             .collect()
     }
 
-    #[allow(dead_code)]
     fn exploitable_cycles(&self, cycles: Vec<Cycle>) -> Vec<Cycle> {
         let mut exploitable_cycles = Vec::new();
 
@@ -321,14 +308,20 @@ mod tests {
         assert_eq!(
             market.swap_map,
             HashMap::from([
-                (SwapId {
-                    pool: PoolId::from("P1"),
-                    direction: Direction::ZeroForOne,
-                }, 0),
-                (SwapId {
-                    pool: PoolId::from("P1"),
-                    direction: Direction::OneForZero,
-                }, 1),
+                (
+                    SwapId {
+                        pool: PoolId::from("P1"),
+                        direction: Direction::ZeroForOne,
+                    },
+                    0
+                ),
+                (
+                    SwapId {
+                        pool: PoolId::from("P1"),
+                        direction: Direction::OneForZero,
+                    },
+                    1
+                ),
             ])
         );
 
@@ -470,8 +463,22 @@ mod tests {
         assert_eq!(
             cycle.swap_sides,
             vec![
-                swap("Pool2", Direction::OneForZero, "A", "B", 100_000, 300_000_000_000_000),
-                swap("Pool1", Direction::OneForZero, "B", "A", 200_000_000_000_000, 100_000),
+                swap(
+                    "Pool2",
+                    Direction::OneForZero,
+                    "A",
+                    "B",
+                    100_000,
+                    300_000_000_000_000
+                ),
+                swap(
+                    "Pool1",
+                    Direction::OneForZero,
+                    "B",
+                    "A",
+                    200_000_000_000_000,
+                    100_000
+                ),
             ]
         );
     }
