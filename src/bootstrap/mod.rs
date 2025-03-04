@@ -96,16 +96,16 @@ pub async fn fetch_all_pairs_v2(
         .await?
         ._0;
 
-    let pairs_len_db = PairService::count_pairs_by_factory_address(&mut ctx.pg_connection, factory)?;
+    let pairs_len_db = PairService::count_pairs_by_factory_address(&mut ctx.pg_connection, factory.to_string().as_str())?;
 
     // Get existing pair addresses to avoid duplicates
     let existing_pairs = PairService::get_pair_addresses_by_factory(&mut ctx.pg_connection, factory.to_string())?;
     let existing_pairs_set: HashSet<String> = HashSet::from_iter(existing_pairs);
 
 
-    if U256::from(pairs_len_db).eq(pairs_len_block) {
-        Ok(())
-    }.expect("TODO: panic message");
+    if U256::from(pairs_len_db).eq(&pairs_len_block) {
+        return Ok(());
+    }
 
     info!("Start from index {start}, total pairs: {pairs_len_block}");
 
@@ -270,14 +270,16 @@ use std::time::Duration;
 /// Start pool bootstrapping as a background task
 pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
-    tokio::spawn(async {
+    tokio::spawn(async move {
         // Wait a bit before starting to ensure the application is fully initialized
         tokio::time::sleep(Duration::from_secs(10)).await;
 
         loop {
             // Wait before next iteration
-            tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await; // Check every 5 minutes
-            monitor_new_pools_by_background(ctx).await?;
+            tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await;
+            if let Err(e) = monitor_new_pools_by_background(ctx).await {
+                error!("Error in pool monitoring: {}", e);
+            }
         }
     });
 
