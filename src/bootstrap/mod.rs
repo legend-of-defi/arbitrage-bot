@@ -19,10 +19,10 @@ use std::ops::Add;
 use std::str::FromStr;
 
 sol!(
-    #[allow(missing_docs)]
+    // #[allow(missing_docs)]
     #[sol(rpc)]
-    UniswapQuery,
-    "contracts/out/UniswapQuery.sol/UniswapQuery.json"
+    // UniswapQuery,
+    "contracts/src/UniswapQuery.sol"
 );
 
 /// Retrieves pairs within a specified index range from a factory contract
