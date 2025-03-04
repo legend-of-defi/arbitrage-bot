@@ -85,7 +85,7 @@ impl DbManager {
         dex_infos: Vec<(NewFactory, NewToken, NewToken, String)>,
     ) -> Vec<(Factory, Token, Token, Pair)> {
         // Execute everything in a single transaction
-        conn.transaction(|conn| {
+        let result: Result<Vec<(Factory, Token, Token, Pair)>, diesel::result::Error> = conn.transaction(|conn| {
             let mut results = Vec::with_capacity(dex_infos.len());
 
             for (factory, token0, token1, pair_address) in dex_infos {
@@ -152,7 +152,9 @@ impl DbManager {
             }
 
             Ok(results)
-        }).unwrap_or_default()
+        });
+
+        result.unwrap_or_default()
     }
 
     // Helper functions
