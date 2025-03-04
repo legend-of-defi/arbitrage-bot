@@ -322,7 +322,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
     Ok(())
 }
 
-/// Bootstrap pools function that takes a mutable reference to AppContext
+// Bootstrap pools function that takes a mutable reference to AppContext
 // pub async fn monitor_new_pools_by_background(ctx: &mut AppContext) -> Result<(), eyre::Error> {
 //     info!("Starting pool monitoring cycle");
 //
