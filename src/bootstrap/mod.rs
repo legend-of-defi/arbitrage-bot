@@ -268,7 +268,7 @@ use crate::db_service::FactoryService;
 use std::time::Duration;
 
 /// Start pool bootstrapping as a background task
-pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), Report> {
+pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
     tokio::spawn(async {
         // Wait a bit before starting to ensure the application is fully initialized
