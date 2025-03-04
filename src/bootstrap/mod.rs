@@ -277,9 +277,45 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
         loop {
             // Wait before next iteration
             tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await;
-            if let Err(e) = monitor_new_pools_by_background(ctx).await {
-                error!("Error in pool monitoring: {}", e);
+            // if let Err(e) = monitor_new_pools_by_background(ctx).await {
+            //     error!("Error in pool monitoring: {}", e);
+            // }
+
+            info!("Starting pool monitoring cycle");
+
+            // Get all factories from database
+            let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
+
+            if factories.is_empty() {
+                info!("No factories found in the database");
+                return Ok(());
             }
+
+            info!("Found {} factories to bootstrap", factories.len());
+
+            // Process each factory
+            for factory in factories {
+                info!("Monitoring new pools for factory: {} ({})", factory.name, factory.address);
+
+                // Convert factory address string to Address type
+                match Address::from_str(&factory.address) {
+                    Ok(factory_address) => {
+                        // fetch_all_pairs_v2 handles resuming from the last saved index
+                        match fetch_all_pairs_v2(ctx, factory_address, 3000).await {
+                            Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
+                            Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
+                        }
+                    },
+                    Err(e) => error!("Invalid factory address {}: {}", factory.address, e),
+                }
+            }
+
+            // Update all pools with reserves
+            info!("Updating pool reserves...");
+            let pools = fetch_all_pools(ctx, 100).await;
+            info!("Pool reserves updated successfully for {} pools", pools.len());
+
+            info!("Pool monitoring cycle completed");
         }
     });
 
@@ -287,41 +323,41 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
 }
 
 /// Bootstrap pools function that takes a mutable reference to AppContext
-pub async fn monitor_new_pools_by_background(ctx: &mut AppContext) -> Result<(), eyre::Error> {
-    info!("Starting pool monitoring cycle");
-
-    // Get all factories from database
-    let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
-
-    if factories.is_empty() {
-        info!("No factories found in the database");
-        return Ok(());
-    }
-
-    info!("Found {} factories to bootstrap", factories.len());
-
-    // Process each factory
-    for factory in factories {
-        info!("Monitoring new pools for factory: {} ({})", factory.name, factory.address);
-
-        // Convert factory address string to Address type
-        match Address::from_str(&factory.address) {
-            Ok(factory_address) => {
-                // fetch_all_pairs_v2 handles resuming from the last saved index
-                match fetch_all_pairs_v2(ctx, factory_address, 3000).await {
-                    Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
-                    Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
-                }
-            },
-            Err(e) => error!("Invalid factory address {}: {}", factory.address, e),
-        }
-    }
-
-    // Update all pools with reserves
-    info!("Updating pool reserves...");
-    let pools = fetch_all_pools(ctx, 100).await;
-    info!("Pool reserves updated successfully for {} pools", pools.len());
-
-    info!("Pool monitoring cycle completed");
-    Ok(())
-}
+// pub async fn monitor_new_pools_by_background(ctx: &mut AppContext) -> Result<(), eyre::Error> {
+//     info!("Starting pool monitoring cycle");
+//
+//     // Get all factories from database
+//     let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
+//
+//     if factories.is_empty() {
+//         info!("No factories found in the database");
+//         return Ok(());
+//     }
+//
+//     info!("Found {} factories to bootstrap", factories.len());
+//
+//     // Process each factory
+//     for factory in factories {
+//         info!("Monitoring new pools for factory: {} ({})", factory.name, factory.address);
+//
+//         // Convert factory address string to Address type
+//         match Address::from_str(&factory.address) {
+//             Ok(factory_address) => {
+//                 // fetch_all_pairs_v2 handles resuming from the last saved index
+//                 match fetch_all_pairs_v2(ctx, factory_address, 3000).await {
+//                     Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
+//                     Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
+//                 }
+//             },
+//             Err(e) => error!("Invalid factory address {}: {}", factory.address, e),
+//         }
+//     }
+//
+//     // Update all pools with reserves
+//     info!("Updating pool reserves...");
+//     let pools = fetch_all_pools(ctx, 100).await;
+//     info!("Pool reserves updated successfully for {} pools", pools.len());
+//
+//     info!("Pool monitoring cycle completed");
+//     Ok(())
+// }
