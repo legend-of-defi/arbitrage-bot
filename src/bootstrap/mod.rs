@@ -194,7 +194,7 @@ pub async fn fetch_reserves_by_range(
         .collect();
     let mut pools_to_replace = Vec::new();
 
-    let reserves = uniswap_v2_batch_request
+    let reserves: Vec<Reserves> = uniswap_v2_batch_request
         .getReservesByPairs(pair_addresses)
         .gas(30_000_000)
         .call()
@@ -335,7 +335,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
 
             // Update all pools with reserves
             info!("Updating pool reserves...");
-            let pools = fetch_all_pools(ctx, 100).await;
+            let pools = fetch_all_pools(ctx, 100).await?;
             info!("Pool reserves updated successfully for {} pools", pools.len());
 
             info!("Pool monitoring cycle completed");
