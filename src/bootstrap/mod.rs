@@ -7,7 +7,6 @@ use crate::models::factory::NewFactory;
 use crate::models::token::NewToken;
 use crate::utils::app_context::AppContext;
 use crate::utils::constants::UNISWAP_V2_BATCH_QUERY_ADDRESS;
-use crate::utils::db_connect::establish_connection;
 
 use alloy::{
     primitives::{Address, U256},
@@ -19,9 +18,6 @@ use std::collections::HashSet;
 use std::ops::Add;
 use std::str::FromStr;
 use futures_util::future::join_all;
-use std::time::Duration;
-use tokio::sync::Mutex;
-use std::sync::Arc;
 
 sol!(
     // #[allow(missing_docs)]
@@ -242,7 +238,7 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
     let mut pool_reserve_tasks = Vec::new();
 
     // Process pairs in batches sequentially
-    for pool_chunk in pools_clone.chunks(batch_size) {
+    for mut pool_chunk in pools_clone.chunks(batch_size) {
         let addresses: Vec<Address> = pool_chunk
             .iter()
             .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
@@ -292,16 +288,11 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
 }
 
 use crate::db_service::FactoryService;
+use std::time::Duration;
 
 /// Start pool bootstrapping as a background task
-pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
+pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
-    
-    // Create initial provider that will be shared
-    let provider = AppContext::create_new_provider().await?;
-    let provider = Arc::new(provider);
-    let provider_clone = provider.clone();
-    
     tokio::spawn(async move {
         // Wait a bit before starting to ensure the application is fully initialized
         tokio::time::sleep(Duration::from_secs(10)).await;
@@ -309,25 +300,16 @@ pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre
         loop {
             // Wait before next iteration
             tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await;
+            // if let Err(e) = monitor_new_pools_by_background(ctx).await {
+            //     error!("Error in pool monitoring: {}", e);
+            // }
 
             info!("Starting pool monitoring cycle");
 
-            // Get all factories from database using connection pool
-            let factories = {
-                let mut conn = match get_connection() {
-                    Ok(conn) => conn,
-                    Err(e) => {
-                        error!("Failed to get database connection: {}", e);
-                        continue;
-                    }
-                };
-                match FactoryService::read_all_factories(&mut conn) {
-                    factories => {
-                        info!("Found {} factories to bootstrap", factories.len());
-                        factories
-                    }
-                }
-            };
+            // Get all factories from database
+            let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
+
+            info!("Found {} factories to bootstrap", factories.len());
 
             // Process each factory
             for factory in factories {
@@ -336,23 +318,8 @@ pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre
                 // Convert factory address string to Address type
                 match Address::from_str(&factory.address) {
                     Ok(factory_address) => {
-                        // Create temporary context for this operation
-                        let mut conn = match get_connection() {
-                            Ok(conn) => conn,
-                            Err(e) => {
-                                error!("Failed to get database connection: {}", e);
-                                continue;
-                            }
-                        };
-                        
-                        let mut ctx = AppContext {
-                            base_provider: provider_clone.as_ref().clone(),
-                            base_provider_websocket_url: AppContext::base_provider_websocket_url(),
-                            pg_connection: conn,
-                            signer: Signer::new("/tmp/fly.sock"),
-                        };
-
-                        match fetch_all_pairs_v2_by_factory(&mut ctx, factory_address, 3000).await {
+                        // fetch_all_pairs_v2 handles resuming from the last saved index
+                        match fetch_all_pairs_v2_by_factory(ctx, factory_address, 3000).await {
                             Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
                             Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
                         }
@@ -363,32 +330,8 @@ pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre
 
             // Update all pools with reserves
             info!("Updating pool reserves...");
-            let pools_result = {
-                let mut conn = match get_connection() {
-                    Ok(conn) => conn,
-                    Err(e) => {
-                        error!("Failed to get database connection: {}", e);
-                        continue;
-                    }
-                };
-                
-                let mut ctx = AppContext {
-                    base_provider: provider_clone.as_ref().clone(),
-                    base_provider_websocket_url: AppContext::base_provider_websocket_url(),
-                    pg_connection: conn,
-                    signer: Signer::new("/tmp/fly.sock"),
-                };
-
-                fetch_all_pools(&mut ctx, 100).await
-            };
-            match pools_result {
-                Ok(pools) => {
-                    info!("Pool reserves updated successfully for {} pools", pools.len());
-                }
-                Err(e) => {
-                    error!("Failed to update pool reserves: {}", e);
-                }
-            }
+            let pools = fetch_all_pools(ctx, 100).await?;
+            info!("Pool reserves updated successfully for {} pools", pools.len());
 
             info!("Pool monitoring cycle completed");
         }
