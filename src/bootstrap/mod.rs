@@ -290,14 +290,11 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
 }
 
 use crate::db_service::FactoryService;
+use std::time::Duration;
 
 /// Start pool bootstrapping as a background task
 pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
-    
-    // Create database connection info before spawning the task
-    let database_url = std::env::var("DATABASE_URL")
-        .map_err(|_| eyre::eyre!("DATABASE_URL must be set"))?;
     
     tokio::spawn(async move {
         // Wait a bit before starting to ensure the application is fully initialized
@@ -309,15 +306,6 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
 
             info!("Starting pool monitoring cycle");
 
-            // Create a new connection for this iteration
-            let mut conn = match PgConnection::establish(&database_url) {
-                Ok(conn) => conn,
-                Err(e) => {
-                    error!("Failed to establish database connection: {}", e);
-                    continue;
-                }
-            };
-
             // Create a new AppContext for this iteration
             let mut ctx = match AppContext::new().await {
                 Ok(ctx) => ctx,
@@ -328,7 +316,7 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
             };
 
             // Get all factories from database
-            let factories = match FactoryService::read_all_factories(&mut conn) {
+            let factories = match FactoryService::read_all_factories(&mut ctx.pg_connection) {
                 factories => {
                     info!("Found {} factories to bootstrap", factories.len());
                     factories
@@ -365,9 +353,8 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
 
             info!("Pool monitoring cycle completed");
             
-            // Drop the context and connection at the end of each iteration
+            // Drop the context at the end of each iteration
             drop(ctx);
-            drop(conn);
         }
     });
 
