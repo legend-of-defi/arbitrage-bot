@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::ops::Add;
 use std::str::FromStr;
 use futures_util::future::join_all;
+use std::time::Duration;
 
 sol!(
     // #[allow(missing_docs)]
@@ -291,9 +292,19 @@ use crate::db_service::FactoryService;
 use std::time::Duration;
 
 /// Start pool bootstrapping as a background task
-pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
+pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
+    
     tokio::spawn(async move {
+        // Create a new AppContext for the background task
+        let mut ctx = match AppContext::new().await {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                error!("Failed to create AppContext: {}", e);
+                return;
+            }
+        };
+
         // Wait a bit before starting to ensure the application is fully initialized
         tokio::time::sleep(Duration::from_secs(10)).await;
 
@@ -319,7 +330,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
                 match Address::from_str(&factory.address) {
                     Ok(factory_address) => {
                         // fetch_all_pairs_v2 handles resuming from the last saved index
-                        match fetch_all_pairs_v2_by_factory(ctx, factory_address, 3000).await {
+                        match fetch_all_pairs_v2_by_factory(&mut ctx, factory_address, 3000).await {
                             Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
                             Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
                         }
@@ -330,7 +341,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
 
             // Update all pools with reserves
             info!("Updating pool reserves...");
-            match fetch_all_pools(ctx, 100).await {
+            match fetch_all_pools(&mut ctx, 100).await {
                 Ok(pools) => {
                     info!("Pool reserves updated successfully for {} pools", pools.len());
                 }
