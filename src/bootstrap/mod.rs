@@ -300,22 +300,16 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
         loop {
             // Wait before next iteration
             tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await;
-            // if let Err(e) = monitor_new_pools_by_background(ctx).await {
-            //     error!("Error in pool monitoring: {}", e);
-            // }
 
             info!("Starting pool monitoring cycle");
 
             // Get all factories from database
             let factories = match FactoryService::read_all_factories(&mut ctx.pg_connection) {
-                Ok(f) => f,
-                Err(e) => {
-                    error!("Failed to read factories: {}", e);
-                    continue;
+                factories => {
+                    info!("Found {} factories to bootstrap", factories.len());
+                    factories
                 }
             };
-
-            info!("Found {} factories to bootstrap", factories.len());
 
             // Process each factory
             for factory in factories {
@@ -336,7 +330,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
 
             // Update all pools with reserves
             info!("Updating pool reserves...");
-            match fetch_all_pools(ctx, 3000).await {
+            match fetch_all_pools(ctx, 100).await {
                 Ok(pools) => {
                     info!("Pool reserves updated successfully for {} pools", pools.len());
                 }
