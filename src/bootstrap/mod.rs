@@ -238,7 +238,7 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
     let mut pool_reserve_tasks = Vec::new();
 
     // Process pairs in batches sequentially
-    for mut pool_chunk in pools_clone.chunks(batch_size) {
+    for pool_chunk in pools_clone.chunks(batch_size) {
         let addresses: Vec<Address> = pool_chunk
             .iter()
             .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
@@ -291,8 +291,9 @@ use crate::db_service::FactoryService;
 use std::time::Duration;
 
 /// Start pool bootstrapping as a background task
-pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
+pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
+
     tokio::spawn(async move {
         // Wait a bit before starting to ensure the application is fully initialized
         tokio::time::sleep(Duration::from_secs(10)).await;
@@ -300,38 +301,48 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
         loop {
             // Wait before next iteration
             tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await;
-            // if let Err(e) = monitor_new_pools_by_background(ctx).await {
-            //     error!("Error in pool monitoring: {}", e);
-            // }
 
             info!("Starting pool monitoring cycle");
 
-            // Get all factories from database
-            let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
+            // Create a new context for this cycle
+            match AppContext::new().await {
+                Ok(mut cycle_ctx) => {
+                    // Get all factories from database
+                    let factories = FactoryService::read_all_factories(&mut cycle_ctx.pg_connection);
 
-            info!("Found {} factories to bootstrap", factories.len());
+                    info!("Found {} factories to bootstrap", factories.len());
 
-            // Process each factory
-            for factory in factories {
-                info!("Monitoring new pools for factory: {} ({})", factory.name, factory.address);
+                    // Process each factory
+                    for factory in factories {
+                        info!("Monitoring new pools for factory: {} ({})", factory.name, factory.address);
 
-                // Convert factory address string to Address type
-                match Address::from_str(&factory.address) {
-                    Ok(factory_address) => {
-                        // fetch_all_pairs_v2 handles resuming from the last saved index
-                        match fetch_all_pairs_v2_by_factory(ctx, factory_address, 3000).await {
-                            Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
-                            Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
+                        // Convert factory address string to Address type
+                        match Address::from_str(&factory.address) {
+                            Ok(factory_address) => {
+                                // fetch_all_pairs_v2 handles resuming from the last saved index
+                                match fetch_all_pairs_v2_by_factory(&mut cycle_ctx, factory_address, 3000).await {
+                                    Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
+                                    Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
+                                }
+                            },
+                            Err(e) => error!("Invalid factory address {}: {}", factory.address, e),
                         }
-                    },
-                    Err(e) => error!("Invalid factory address {}: {}", factory.address, e),
+                    }
+
+                    // Update all pools with reserves
+                    info!("Updating pool reserves...");
+                    match fetch_all_pools(&mut cycle_ctx, 100).await {
+                        Ok(pools) => info!("Pool reserves updated successfully for {} pools", pools.len()),
+                        Err(e) => error!("Failed to update pool reserves: {}", e),
+                    }
+                },
+                Err(e) => {
+                    error!("Failed to create context for monitoring cycle: {}", e);
+                    // Wait a bit before trying again
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    continue;
                 }
             }
-
-            // Update all pools with reserves
-            info!("Updating pool reserves...");
-            // let pools = fetch_all_pools(ctx, 100).await?;
-            // info!("Pool reserves updated successfully for {} pools", pools.len());
 
             info!("Pool monitoring cycle completed");
         }
