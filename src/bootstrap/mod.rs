@@ -17,6 +17,7 @@ use log::{error, info};
 use std::collections::HashSet;
 use std::ops::Add;
 use std::str::FromStr;
+use futures_util::future::join_all;
 
 sol!(
     // #[allow(missing_docs)]
@@ -78,7 +79,7 @@ pub async fn fetch_pairs_v2_by_range(
 /// # Panics
 /// * If application context creation fails
 /// * If database connection fails
-pub async fn fetch_all_pairs_v2(
+pub async fn fetch_all_pairs_v2_by_factory(
     ctx: &mut AppContext,
     factory: Address,
     batch_size: u64,
@@ -102,39 +103,38 @@ pub async fn fetch_all_pairs_v2(
     let existing_pairs = PairService::get_pair_addresses_by_factory(&mut ctx.pg_connection, factory.to_string())?;
     let existing_pairs_set: HashSet<String> = HashSet::from_iter(existing_pairs);
 
-
     if U256::from(pairs_len_db).eq(&pairs_len_block) {
         return Ok(());
     }
 
     info!("Start from index {start}, total pairs: {pairs_len_block}");
 
+    let mut fetch_pair_task = Vec::new();
     while start < pairs_len_block {
         let end = (start.add(U256::from(batch_size))).min(pairs_len_block);
 
         // Process single batch
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         info!("Fetching pairs for range {start} to {end}");
-        let pairs = match fetch_pairs_v2_by_range(ctx, factory, start, end).await {
-            Ok(pairs) => pairs,
-            Err(e) => {
-                error!("Error fetching pairs for range {start} to {end}: {e}");
-                start = end;
-                continue;
-            }
-        };
-        info!("Processing batch: {start} to {end}");
 
-        // Convert pairs to database format
-        let mut dex_infos = Vec::new();
-        let uniswap_factory = NewFactory {
-            address: factory.to_string(),
-            version: "2".parse()?,
-            fee: 300,
-            name: "Uniswap V2".parse()?,
-        };
+        fetch_pair_task.push(fetch_pairs_v2_by_range(ctx, factory, start, end));
+        info!("Add batch: {start} to {end}");
 
-        for pair in pairs {
+        start = end;
+    }
+
+    let pair_batches = join_all(fetch_pair_task).await;
+
+    // Convert pairs to database format
+    let mut dex_infos = Vec::new();
+    let uniswap_factory = NewFactory {
+        address: factory.to_string(),
+        version: "2".parse()?,
+        fee: 300,
+        name: "Uniswap V2".parse()?,
+    };
+    for pairs in pair_batches {
+        for pair in pairs? {
             if existing_pairs_set.contains(&pair.address) {
                 continue;
             }
@@ -158,13 +158,10 @@ pub async fn fetch_all_pairs_v2(
                 pair.address.to_string(),
             ));
         }
-
-        // Save batch to database
-        let _ = DbManager::batch_save_dex_info(&mut ctx.pg_connection, dex_infos);
-
-        start = end;
     }
 
+    // Save batch to database
+    let _ = DbManager::batch_save_dex_info(&mut ctx.pg_connection, dex_infos);
     Ok(())
 }
 
@@ -186,22 +183,37 @@ pub async fn fetch_all_pairs_v2(
 /// * If batch request contract initialization fails
 pub async fn fetch_reserves_by_range(
     ctx: &AppContext,
-    pairs: Vec<Address>,
-) -> Result<Vec<Reserves>, eyre::Report> {
+    pool_chunk: &[Pool],
+) -> Result<Vec<Pool>, eyre::Report> {
     let uniswap_v2_batch_request =
         UniswapQuery::new(UNISWAP_V2_BATCH_QUERY_ADDRESS, &ctx.base_provider);
 
-    println!("pairs: {pairs:?}");
+    let pair_addresses: Vec<Address> = pool_chunk
+        .iter()
+        .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
+        .collect();
+    let mut pools_to_replace = Vec::new();
 
-    Ok(uniswap_v2_batch_request
-        .getReservesByPairs(pairs)
+    let reserves = uniswap_v2_batch_request
+        .getReservesByPairs(pair_addresses)
         .gas(30_000_000)
         .call()
         .await?
         ._0
         .into_iter()
         .map(Into::into)
-        .collect())
+        .collect();
+
+    for (i, pool) in pool_chunk.iter().enumerate() {
+        let new_reserves = &reserves[i];
+
+        let mut updated_pool = pool.clone();
+        updated_pool.reserve0 = Some(new_reserves.reserve0);
+        updated_pool.reserve1 = Some(new_reserves.reserve1);
+        pools_to_replace.push(updated_pool);
+    }
+
+    Ok(pools_to_replace)
 }
 
 /// Retrieves reserves for all pairs in the database
@@ -217,51 +229,62 @@ pub async fn fetch_reserves_by_range(
 /// * If HTTP provider creation fails
 /// * If contract calls fail
 /// * If pair addresses cannot be parsed
-pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> HashSet<Pool> {
+pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<HashSet<Pool>, eyre::Report> {
     // Create context in a block to drop PgConnection before async operations
     let pools = PairService::load_all_pools(&mut ctx.pg_connection);
     let pools_clone: Vec<Pool> = pools.iter().cloned().collect();
-    let mut pools_to_replace = Vec::new();
+    // let mut pools_to_replace = Vec::new();
     let mut result_pools = pools;
+    let mut pool_reserve_tasks = Vec::new();
 
     // Process pairs in batches sequentially
-    for pool in pools_clone.chunks(batch_size) {
-        let addresses: Vec<Address> = pool
+    for mut pool_chunk in pools_clone.chunks(batch_size) {
+        let addresses: Vec<Address> = pool_chunk
             .iter()
             .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
             .collect();
 
-        // Process single batch
-        let reserves = match fetch_reserves_by_range(ctx, addresses).await {
-            Ok(reserves) => reserves,
-            Err(e) => {
-                error!("Error fetching reserves: {e}");
-                continue;
-            }
-        };
+        pool_reserve_tasks.push(fetch_reserves_by_range(ctx, pool_chunk));
+        // // Process single batch
+        // let reserves = match fetch_reserves_by_range(ctx, addresses).await {
+        //     Ok(reserves) => reserves,
+        //     Err(e) => {
+        //         error!("Error fetching reserves: {e}");
+        //         continue;
+        //     }
+        // };
 
-        for (i, pool) in pool.iter().enumerate() {
-            let new_reserves = &reserves[i];
-
-            // Remove old pool and insert updated one
-            if result_pools.remove(pool) {
-                let mut updated_pool = pool.clone();
-                updated_pool.reserve0 = Some(new_reserves.reserve0);
-                updated_pool.reserve1 = Some(new_reserves.reserve1);
-                pools_to_replace.push(updated_pool);
-            }
-        }
+        // for (i, pool) in pool_chunk.iter().enumerate() {
+        //     let new_reserves = &reserves[i];
+        //
+        //     // Remove old pool and insert updated one
+        //     if result_pools.remove(pool) {
+        //         let mut updated_pool = pool.clone();
+        //         updated_pool.reserve0 = Some(new_reserves.reserve0);
+        //         updated_pool.reserve1 = Some(new_reserves.reserve1);
+        //         pools_to_replace.push(updated_pool);
+        //     }
+        // }
 
         // Add delay between batches
-        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
 
-    // Insert all updated pools at once (after iteration)
-    for pool in pools_to_replace {
-        result_pools.insert(pool);
+    let pool_reserve_batch = join_all(pool_reserve_tasks).await;
+    for pool_reserves in pool_reserve_batch {
+        for pool in pool_reserves? {
+            if result_pools.remove(&pool) {
+                result_pools.insert(pool);
+            }
+        }
     }
+    //
+    // // Insert all updated pools at once (after iteration)
+    // for pool in pools_to_replace {
+    //     result_pools.insert(pool);
+    // }
 
-    result_pools
+    Ok(result_pools)
 }
 
 use crate::db_service::FactoryService;
@@ -288,7 +311,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
 
             if factories.is_empty() {
                 info!("No factories found in the database");
-                continue;
+                return Ok(());
             }
 
             info!("Found {} factories to bootstrap", factories.len());
@@ -301,7 +324,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
                 match Address::from_str(&factory.address) {
                     Ok(factory_address) => {
                         // fetch_all_pairs_v2 handles resuming from the last saved index
-                        match fetch_all_pairs_v2(ctx, factory_address, 3000).await {
+                        match fetch_all_pairs_v2_by_factory(ctx, factory_address, 3000).await {
                             Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
                             Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
                         }
@@ -322,7 +345,7 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
     Ok(())
 }
 
-// Bootstrap pools function that takes a mutable reference to AppContext
+/// Bootstrap pools function that takes a mutable reference to AppContext
 // pub async fn monitor_new_pools_by_background(ctx: &mut AppContext) -> Result<(), eyre::Error> {
 //     info!("Starting pool monitoring cycle");
 //

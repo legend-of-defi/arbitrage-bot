@@ -4,7 +4,7 @@ use std::env;
 use std::sync::Arc;
 
 use crate::arb::world::World;
-use crate::bootstrap::{fetch_all_pairs_v2, fetch_all_pools};
+use crate::bootstrap::{fetch_all_pairs_v2_by_factory, fetch_all_pools};
 use crate::bot::Bot;
 use crate::db_service::PairService;
 use crate::notify::SlackNotifier;
@@ -51,11 +51,11 @@ enum Commands {
 async fn run_default_behavior(mut ctx: AppContext) -> Result<(), Error> {
     info!(
         "Server Started with DATABASE_URL: {}",
-        env::var("DATABASE_URL").unwrap()
+        env::var("DATABASE_URL")?
     );
 
     let uniswap_v2_factory_base = address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6");
-    fetch_all_pairs_v2(&mut ctx, uniswap_v2_factory_base, 750).await?;
+    fetch_all_pairs_v2_by_factory(&mut ctx, uniswap_v2_factory_base, 3000).await?;
 
     // Display all pairs with token information
     let pairs = PairService::read_all_pairs(&mut ctx.pg_connection);
@@ -64,7 +64,7 @@ async fn run_default_behavior(mut ctx: AppContext) -> Result<(), Error> {
 
     println!("Database connected successfully!");
 
-    let pools = fetch_all_pools(&mut ctx, 1).await;
+    let pools = fetch_all_pools(&mut ctx, 3000_usize).await?;
     let num_pairs = pools.len();
 
     let _world = World::new(&pools);
@@ -102,7 +102,7 @@ async fn send_slack_error_message(message: &str) -> Result<(), Error> {
 
 async fn process_batches(mut ctx: AppContext) -> Result<(), Error> {
     let uniswap_v2_factory_base = address!("0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6");
-    fetch_all_pairs_v2(&mut ctx, uniswap_v2_factory_base, 750).await?;
+    fetch_all_pairs_v2_by_factory(&mut ctx, uniswap_v2_factory_base, 750).await?;
     println!("Batch processing completed successfully");
     Ok(())
 }

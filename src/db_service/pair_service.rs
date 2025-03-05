@@ -187,8 +187,8 @@ impl PairService {
             INNER JOIN tokens t1 ON p.token1_id = t1.id
             INNER JOIN factories f ON p.factory_id = f.id
         ")
-        .load::<PairWithTokens>(conn)
-        .expect("Error loading pairs with tokens");
+            .load::<PairWithTokens>(conn)
+            .expect("Error loading pairs with tokens");
 
         // Create pools from the joined results
         let mut pools = HashSet::with_capacity(rows.len());
