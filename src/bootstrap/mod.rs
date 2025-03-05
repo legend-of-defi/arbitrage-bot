@@ -1,4 +1,5 @@
 pub mod types;
+pub mod standalone_pool_monitoring;
 
 use crate::arb::pool::Pool;
 use crate::bootstrap::types::{PairInfo, Reserves};
@@ -256,106 +257,11 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
     Ok(result_pools)
 }
 
-use crate::db_service::FactoryService;
-use std::time::Duration;
-
 /// Start pool monitoring as a background task
+///
+/// This version completely avoids capturing any context references by creating a dedicated
+/// thread with its own tokio runtime and context instances.
 pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
-    info!("Starting pool bootstrapping background task");
-
-    // Move the interval into the spawned task
-    let interval_secs = time_interval_by_sec;
-
-    // Don't capture the context, we'll create new ones as needed
-    tokio::spawn(async move {
-        // Wait a bit before starting to ensure the application is fully initialized
-        tokio::time::sleep(Duration::from_secs(10)).await;
-
-        loop {
-            // Wait before next iteration
-            tokio::time::sleep(Duration::from_secs(interval_secs)).await;
-
-            info!("Starting pool monitoring cycle");
-
-            // Create a new AppContext for this monitoring cycle
-            match AppContext::new().await {
-                Ok(mut new_ctx) => {
-                    // Get all factories from database using a direct approach
-                    let factories = FactoryService::read_all_factories(&mut new_ctx.pg_connection);
-
-                    info!("Found {} factories to bootstrap", factories.len());
-
-                    // Process each factory
-                    for factory in factories {
-                        info!("Monitoring new pools for factory: {} ({})", factory.name, factory.address);
-
-                        // Convert factory address string to Address type
-                        match Address::from_str(&factory.address) {
-                            Ok(factory_address) => {
-                                // fetch_all_pairs_v2 handles resuming from the last saved index
-                                match fetch_all_pairs_v2_by_factory(&mut new_ctx, factory_address, 3000).await {
-                                    Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
-                                    Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
-                                }
-                            },
-                            Err(e) => error!("Invalid factory address {}: {}", factory.address, e),
-                        }
-                    }
-
-                    // Update all pools with reserves
-                    info!("Updating pool reserves...");
-                    match fetch_all_pools(&mut new_ctx, 100).await {
-                        Ok(pools) => info!("Pool reserves updated successfully for {} pools", pools.len()),
-                        Err(e) => error!("Failed to update pool reserves: {}", e),
-                    }
-                },
-                Err(e) => {
-                    error!("Failed to create context for pool monitoring: {}", e);
-                }
-            }
-
-            info!("Pool monitoring cycle completed");
-        }
-    });
-
-    Ok(())
+    // Just call our standalone version that doesn't need the context
+    crate::bootstrap::standalone_pool_monitoring::start_pool_monitoring(time_interval_by_sec)
 }
-// Bootstrap pools function that takes a mutable reference to AppContext
-// pub async fn monitor_new_pools_by_background(ctx: &mut AppContext) -> Result<(), eyre::Error> {
-//     info!("Starting pool monitoring cycle");
-//
-//     // Get all factories from database
-//     let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
-//
-//     if factories.is_empty() {
-//         info!("No factories found in the database");
-//         return Ok(());
-//     }
-//
-//     info!("Found {} factories to bootstrap", factories.len());
-//
-//     // Process each factory
-//     for factory in factories {
-//         info!("Monitoring new pools for factory: {} ({})", factory.name, factory.address);
-//
-//         // Convert factory address string to Address type
-//         match Address::from_str(&factory.address) {
-//             Ok(factory_address) => {
-//                 // fetch_all_pairs_v2 handles resuming from the last saved index
-//                 match fetch_all_pairs_v2(ctx, factory_address, 3000).await {
-//                     Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
-//                     Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
-//                 }
-//             },
-//             Err(e) => error!("Invalid factory address {}: {}", factory.address, e),
-//         }
-//     }
-//
-//     // Update all pools with reserves
-//     info!("Updating pool reserves...");
-//     let pools = fetch_all_pools(ctx, 100).await;
-//     info!("Pool reserves updated successfully for {} pools", pools.len());
-//
-//     info!("Pool monitoring cycle completed");
-//     Ok(())
-// }
