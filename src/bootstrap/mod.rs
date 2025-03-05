@@ -330,8 +330,8 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
 
             // Update all pools with reserves
             info!("Updating pool reserves...");
-            let pools = fetch_all_pools(ctx, 100).await?;
-            info!("Pool reserves updated successfully for {} pools", pools.len());
+            // let pools = fetch_all_pools(ctx, 100).await?;
+            // info!("Pool reserves updated successfully for {} pools", pools.len());
 
             info!("Pool monitoring cycle completed");
         }
