@@ -294,18 +294,11 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
 use crate::db_service::FactoryService;
 
 /// Start pool bootstrapping as a background task
-pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
+pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
     
     // Create AppContext and wrap it in Arc<Mutex>
-    let ctx = Arc::new(Mutex::new(match AppContext::new().await {
-        Ok(ctx) => ctx,
-        Err(e) => {
-            error!("Failed to create AppContext: {}", e);
-            return Err(e);
-        }
-    }));
-
+    let ctx = Arc::new(Mutex::new(AppContext::new().await?));
     let ctx_clone = ctx.clone();
     
     tokio::spawn(async move {
@@ -320,7 +313,7 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
 
             // Get all factories from database
             let factories = {
-                let mut ctx_guard = ctx_clone.lock().await;
+                let ctx_guard = ctx_clone.lock().await;
                 match FactoryService::read_all_factories(&mut ctx_guard.pg_connection) {
                     factories => {
                         info!("Found {} factories to bootstrap", factories.len());
@@ -339,7 +332,7 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
                         // fetch_all_pairs_v2 handles resuming from the last saved index
                         let result = {
                             let mut ctx_guard = ctx_clone.lock().await;
-                            fetch_all_pairs_v2_by_factory(&mut ctx_guard, factory_address, 3000).await
+                            fetch_all_pairs_v2_by_factory(&mut *ctx_guard, factory_address, 3000).await
                         };
                         match result {
                             Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
@@ -354,7 +347,7 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
             info!("Updating pool reserves...");
             let pools_result = {
                 let mut ctx_guard = ctx_clone.lock().await;
-                fetch_all_pools(&mut ctx_guard, 100).await
+                fetch_all_pools(&mut *ctx_guard, 100).await
             };
             match pools_result {
                 Ok(pools) => {
