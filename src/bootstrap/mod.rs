@@ -309,11 +309,6 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
             // Get all factories from database
             let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
 
-            if factories.is_empty() {
-                info!("No factories found in the database");
-                return Ok(());
-            }
-
             info!("Found {} factories to bootstrap", factories.len());
 
             // Process each factory
