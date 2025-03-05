@@ -14,7 +14,7 @@ use alloy::{
     sol,
 };
 use eyre::Report;
-use log::{error, info};
+use log::info;
 use std::collections::HashSet;
 use std::ops::Add;
 use std::str::FromStr;
@@ -261,7 +261,7 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
 ///
 /// This version completely avoids capturing any context references by creating a dedicated
 /// thread with its own tokio runtime and context instances.
-pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
+pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     // Just call our standalone version that doesn't need the context
     crate::bootstrap::standalone_pool_monitoring::start_pool_monitoring(time_interval_by_sec)
 }

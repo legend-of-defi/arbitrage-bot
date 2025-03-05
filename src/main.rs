@@ -69,7 +69,7 @@ async fn run_default_behavior(mut ctx: AppContext) -> Result<(), Error> {
 
     let _world = World::new(&pools);
 
-    start_pool_monitoring(&mut ctx, 300)?;
+    start_pool_monitoring(300)?;
 
     subscribe_to_sync(&ctx).await?;
 
