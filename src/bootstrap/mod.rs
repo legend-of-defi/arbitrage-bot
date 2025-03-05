@@ -233,38 +233,12 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
     // Create context in a block to drop PgConnection before async operations
     let pools = PairService::load_all_pools(&mut ctx.pg_connection);
     let pools_clone: Vec<Pool> = pools.iter().cloned().collect();
-    // let mut pools_to_replace = Vec::new();
     let mut result_pools = pools;
     let mut pool_reserve_tasks = Vec::new();
 
     // Process pairs in batches sequentially
     for pool_chunk in pools_clone.chunks(batch_size) {
-        let addresses: Vec<Address> = pool_chunk
-            .iter()
-            .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
-            .collect();
-
         pool_reserve_tasks.push(fetch_reserves_by_range(ctx, pool_chunk));
-        // // Process single batch
-        // let reserves = match fetch_reserves_by_range(ctx, addresses).await {
-        //     Ok(reserves) => reserves,
-        //     Err(e) => {
-        //         error!("Error fetching reserves: {e}");
-        //         continue;
-        //     }
-        // };
-
-        // for (i, pool) in pool_chunk.iter().enumerate() {
-        //     let new_reserves = &reserves[i];
-        //
-        //     // Remove old pool and insert updated one
-        //     if result_pools.remove(pool) {
-        //         let mut updated_pool = pool.clone();
-        //         updated_pool.reserve0 = Some(new_reserves.reserve0);
-        //         updated_pool.reserve1 = Some(new_reserves.reserve1);
-        //         pools_to_replace.push(updated_pool);
-        //     }
-        // }
 
         // Add delay between batches
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -278,11 +252,6 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
             }
         }
     }
-    //
-    // // Insert all updated pools at once (after iteration)
-    // for pool in pools_to_replace {
-    //     result_pools.insert(pool);
-    // }
 
     Ok(result_pools)
 }
@@ -290,25 +259,38 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
 use crate::db_service::FactoryService;
 use std::time::Duration;
 
-/// Start pool bootstrapping as a background task
+/// Start pool monitoring as a background task
 pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
 
+    // Move the interval into the spawned task
+    let interval_secs = time_interval_by_sec;
+
+    // Don't capture the context, we'll create new ones as needed
     tokio::spawn(async move {
         // Wait a bit before starting to ensure the application is fully initialized
         tokio::time::sleep(Duration::from_secs(10)).await;
 
         loop {
             // Wait before next iteration
-            tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await;
+            tokio::time::sleep(Duration::from_secs(interval_secs)).await;
 
             info!("Starting pool monitoring cycle");
 
-            // Create a new context for this cycle
+            // Create a new AppContext for this monitoring cycle
             match AppContext::new().await {
-                Ok(mut cycle_ctx) => {
+                Ok(mut new_ctx) => {
                     // Get all factories from database
-                    let factories = FactoryService::read_all_factories(&mut cycle_ctx.pg_connection);
+                    let factories = match std::panic::catch_unwind(|| {
+                        FactoryService::read_all_factories(&mut new_ctx.pg_connection)
+                    }) {
+                        Ok(factories) => factories,
+                        Err(e) => {
+                            error!("Error reading factories: {:?}", e);
+                            // Wait a bit before trying again
+                            continue;
+                        }
+                    };
 
                     info!("Found {} factories to bootstrap", factories.len());
 
@@ -320,7 +302,7 @@ pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -
                         match Address::from_str(&factory.address) {
                             Ok(factory_address) => {
                                 // fetch_all_pairs_v2 handles resuming from the last saved index
-                                match fetch_all_pairs_v2_by_factory(&mut cycle_ctx, factory_address, 3000).await {
+                                match fetch_all_pairs_v2_by_factory(&mut new_ctx, factory_address, 3000).await {
                                     Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
                                     Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
                                 }
@@ -331,16 +313,13 @@ pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -
 
                     // Update all pools with reserves
                     info!("Updating pool reserves...");
-                    match fetch_all_pools(&mut cycle_ctx, 100).await {
+                    match fetch_all_pools(&mut new_ctx, 100).await {
                         Ok(pools) => info!("Pool reserves updated successfully for {} pools", pools.len()),
                         Err(e) => error!("Failed to update pool reserves: {}", e),
                     }
                 },
                 Err(e) => {
-                    error!("Failed to create context for monitoring cycle: {}", e);
-                    // Wait a bit before trying again
-                    tokio::time::sleep(Duration::from_secs(30)).await;
-                    continue;
+                    error!("Failed to create context for pool monitoring: {}", e);
                 }
             }
 
@@ -350,7 +329,6 @@ pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -
 
     Ok(())
 }
-
 // Bootstrap pools function that takes a mutable reference to AppContext
 // pub async fn monitor_new_pools_by_background(ctx: &mut AppContext) -> Result<(), eyre::Error> {
 //     info!("Starting pool monitoring cycle");
