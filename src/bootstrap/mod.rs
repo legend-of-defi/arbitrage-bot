@@ -307,7 +307,13 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
             info!("Starting pool monitoring cycle");
 
             // Get all factories from database
-            let factories = FactoryService::read_all_factories(&mut ctx.pg_connection);
+            let factories = match FactoryService::read_all_factories(&mut ctx.pg_connection) {
+                Ok(f) => f,
+                Err(e) => {
+                    error!("Failed to read factories: {}", e);
+                    continue;
+                }
+            };
 
             info!("Found {} factories to bootstrap", factories.len());
 
@@ -330,8 +336,14 @@ pub fn start_pool_monitoring(ctx: &mut AppContext, time_interval_by_sec: u64) ->
 
             // Update all pools with reserves
             info!("Updating pool reserves...");
-            let pools = fetch_all_pools(ctx, 100).await?;
-            info!("Pool reserves updated successfully for {} pools", pools.len());
+            match fetch_all_pools(ctx, 3000).await {
+                Ok(pools) => {
+                    info!("Pool reserves updated successfully for {} pools", pools.len());
+                }
+                Err(e) => {
+                    error!("Failed to update pool reserves: {}", e);
+                }
+            }
 
             info!("Pool monitoring cycle completed");
         }
