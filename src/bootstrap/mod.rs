@@ -297,9 +297,10 @@ use crate::db_service::FactoryService;
 pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
     
-    // Create AppContext and wrap it in Arc<Mutex>
-    let ctx = Arc::new(Mutex::new(AppContext::new().await?));
-    let ctx_clone = ctx.clone();
+    // Create initial provider that will be shared
+    let provider = AppContext::create_new_provider().await?;
+    let provider = Arc::new(provider);
+    let provider_clone = provider.clone();
     
     tokio::spawn(async move {
         // Wait a bit before starting to ensure the application is fully initialized
@@ -311,10 +312,16 @@ pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre
 
             info!("Starting pool monitoring cycle");
 
-            // Get all factories from database
+            // Get all factories from database using connection pool
             let factories = {
-                let ctx_guard = ctx_clone.lock().await;
-                match FactoryService::read_all_factories(&mut ctx_guard.pg_connection) {
+                let mut conn = match get_connection() {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        error!("Failed to get database connection: {}", e);
+                        continue;
+                    }
+                };
+                match FactoryService::read_all_factories(&mut conn) {
                     factories => {
                         info!("Found {} factories to bootstrap", factories.len());
                         factories
@@ -329,12 +336,23 @@ pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre
                 // Convert factory address string to Address type
                 match Address::from_str(&factory.address) {
                     Ok(factory_address) => {
-                        // fetch_all_pairs_v2 handles resuming from the last saved index
-                        let result = {
-                            let mut ctx_guard = ctx_clone.lock().await;
-                            fetch_all_pairs_v2_by_factory(&mut *ctx_guard, factory_address, 3000).await
+                        // Create temporary context for this operation
+                        let mut conn = match get_connection() {
+                            Ok(conn) => conn,
+                            Err(e) => {
+                                error!("Failed to get database connection: {}", e);
+                                continue;
+                            }
                         };
-                        match result {
+                        
+                        let mut ctx = AppContext {
+                            base_provider: provider_clone.as_ref().clone(),
+                            base_provider_websocket_url: AppContext::base_provider_websocket_url(),
+                            pg_connection: conn,
+                            signer: Signer::new("/tmp/fly.sock"),
+                        };
+
+                        match fetch_all_pairs_v2_by_factory(&mut ctx, factory_address, 3000).await {
                             Ok(_) => info!("Successfully detect new pairs for factory: {}", factory.name),
                             Err(e) => error!("Failed to monitor new pairs for factory {}: {}", factory.name, e),
                         }
@@ -346,8 +364,22 @@ pub async fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre
             // Update all pools with reserves
             info!("Updating pool reserves...");
             let pools_result = {
-                let mut ctx_guard = ctx_clone.lock().await;
-                fetch_all_pools(&mut *ctx_guard, 100).await
+                let mut conn = match get_connection() {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        error!("Failed to get database connection: {}", e);
+                        continue;
+                    }
+                };
+                
+                let mut ctx = AppContext {
+                    base_provider: provider_clone.as_ref().clone(),
+                    base_provider_websocket_url: AppContext::base_provider_websocket_url(),
+                    pg_connection: conn,
+                    signer: Signer::new("/tmp/fly.sock"),
+                };
+
+                fetch_all_pools(&mut ctx, 100).await
             };
             match pools_result {
                 Ok(pools) => {
