@@ -7,6 +7,7 @@ use crate::models::factory::NewFactory;
 use crate::models::token::NewToken;
 use crate::utils::app_context::AppContext;
 use crate::utils::constants::UNISWAP_V2_BATCH_QUERY_ADDRESS;
+use crate::utils::db_connect::establish_connection;
 
 use alloy::{
     primitives::{Address, U256},
@@ -313,11 +314,20 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
 
             info!("Starting pool monitoring cycle");
 
-            // Get all factories from database
-            let factories = match FactoryService::read_all_factories(&mut ctx.pg_connection) {
-                factories => {
-                    info!("Found {} factories to bootstrap", factories.len());
-                    factories
+            // Get all factories from database using a new connection
+            let factories = {
+                let mut conn = match establish_connection() {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        error!("Failed to establish database connection: {}", e);
+                        continue;
+                    }
+                };
+                match FactoryService::read_all_factories(&mut conn) {
+                    factories => {
+                        info!("Found {} factories to bootstrap", factories.len());
+                        factories
+                    }
                 }
             };
 
