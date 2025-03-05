@@ -19,7 +19,6 @@ use std::ops::Add;
 use std::str::FromStr;
 use futures_util::future::join_all;
 use std::time::Duration;
-use diesel::PgConnection;
 
 sol!(
     // #[allow(missing_docs)]
@@ -240,7 +239,7 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
     let mut pool_reserve_tasks = Vec::new();
 
     // Process pairs in batches sequentially
-    for mut pool_chunk in pools_clone.chunks(batch_size) {
+    for pool_chunk in pools_clone.chunks(batch_size) {
         let addresses: Vec<Address> = pool_chunk
             .iter()
             .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
@@ -290,13 +289,21 @@ pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<
 }
 
 use crate::db_service::FactoryService;
-use std::time::Duration;
 
 /// Start pool bootstrapping as a background task
 pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
     info!("Starting pool bootstrapping background task");
     
     tokio::spawn(async move {
+        // Create a new AppContext for this iteration
+        let mut ctx = match AppContext::new().await {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                error!("Failed to create AppContext: {}", e);
+                return;
+            }
+        };
+
         // Wait a bit before starting to ensure the application is fully initialized
         tokio::time::sleep(Duration::from_secs(10)).await;
 
@@ -305,15 +312,6 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
             tokio::time::sleep(Duration::from_secs(time_interval_by_sec)).await;
 
             info!("Starting pool monitoring cycle");
-
-            // Create a new AppContext for this iteration
-            let mut ctx = match AppContext::new().await {
-                Ok(ctx) => ctx,
-                Err(e) => {
-                    error!("Failed to create AppContext: {}", e);
-                    continue;
-                }
-            };
 
             // Get all factories from database
             let factories = match FactoryService::read_all_factories(&mut ctx.pg_connection) {
@@ -353,8 +351,14 @@ pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Erro
 
             info!("Pool monitoring cycle completed");
             
-            // Drop the context at the end of each iteration
-            drop(ctx);
+            // Create a new context for the next iteration
+            ctx = match AppContext::new().await {
+                Ok(ctx) => ctx,
+                Err(e) => {
+                    error!("Failed to create AppContext for next iteration: {}", e);
+                    continue;
+                }
+            };
         }
     });
 
