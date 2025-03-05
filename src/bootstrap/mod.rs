@@ -280,17 +280,8 @@ pub fn start_pool_monitoring(_ctx: &mut AppContext, time_interval_by_sec: u64) -
             // Create a new AppContext for this monitoring cycle
             match AppContext::new().await {
                 Ok(mut new_ctx) => {
-                    // Get all factories from database
-                    let factories = match std::panic::catch_unwind(|| {
-                        FactoryService::read_all_factories(&mut new_ctx.pg_connection)
-                    }) {
-                        Ok(factories) => factories,
-                        Err(e) => {
-                            error!("Error reading factories: {:?}", e);
-                            // Wait a bit before trying again
-                            continue;
-                        }
-                    };
+                    // Get all factories from database using a direct approach
+                    let factories = FactoryService::read_all_factories(&mut new_ctx.pg_connection);
 
                     info!("Found {} factories to bootstrap", factories.len());
 
