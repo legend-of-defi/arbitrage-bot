@@ -1,11 +1,8 @@
 ethereum_nodes:
   hosts:
     fly:
-      ansible_host: 65.108.194.190
-      ansible_user: root
+      ansible_connection: local
       ansible_python_interpreter: /usr/bin/python3
-      ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
-      ansible_become: false
   vars:
     slack_oauth_token: "{{ lookup('env', 'SLACK_OAUTH_TOKEN') }}"
     basescan_api_key: "{{ lookup('env', 'BASESCAN_API_KEY') }}"
