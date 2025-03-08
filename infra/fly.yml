@@ -3,6 +3,11 @@
   hosts: fly
   become: true
   tasks:
+    - name: Create fly group
+      ansible.builtin.group:
+        name: fly
+        state: present
+
     - name: Create fly system user
       ansible.builtin.user:
         name: fly
