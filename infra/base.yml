@@ -49,8 +49,8 @@
           [core]
             sshCommand = ssh -i /home/base/.ssh/fly_github -F /dev/null
           [user]
-            email = akmegran@gmail.com
-            name = Stas
+            email = viacheslav.shevchenko000@gmail.com
+            name = viacheslav0711
         owner: base
         group: base
         mode: '0644'
