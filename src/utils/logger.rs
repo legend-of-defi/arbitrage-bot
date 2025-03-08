@@ -1,16 +1,16 @@
 use chrono::Local;
-use eyre::{Error, Result};
+use eyre::Result;
 use fern::Dispatch;
 
 /// Sets up the application logger with file and console output.
 ///
 /// # Returns
-/// * `Result<(), Error>` - Success or failure of logger setup
+/// * `Result<()>` - Success or failure of logger setup
 ///
 /// # Errors
 /// * If log file creation fails
 /// * If logger configuration fails
-pub fn setup_logger() -> Result<(), Error> {
+pub fn setup_logger() -> Result<()> {
     Dispatch::new()
         // Set the default logging level
         .level(log::LevelFilter::Info)

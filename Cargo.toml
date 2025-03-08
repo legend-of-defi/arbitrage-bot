@@ -7,11 +7,11 @@ edition = "2021"
 tokio = { version = "1.43.0", features = ["full"] }
 dotenv = "0.15.0"
 fern = "0.7.1"
-log = "0.4.25"
-chrono = "0.4.39"
-serde_json = "1"
-diesel = { version = "2.2.7", features = ["postgres", "r2d2"] }
-r2d2 = "0.8.10"
+log = "0.4.26"
+chrono = "0.4.40"
+serde_json = "1.0.140"
+diesel = { version = "2.1.1", features = ["postgres", "chrono", "serde_json", "numeric"] }
+diesel-async = { version = "0.5.2", features = ["postgres", "deadpool"] }
 fastrand = "2.0.1"
 alloy = { version = "0.11.1", features = ["full"] }
 futures = "0.3.31"
@@ -25,6 +25,12 @@ tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 derive_more = { version = "1.0.0", features = ["display"] }
 reqwest = { version = "0.11", features = ["json"] }
 itertools = "0.14.0"
+bigdecimal = "0.4.2"
+indicatif = "0.17.11"
+deadpool-postgres = "0.12"
+tokio-postgres = "0.7"
+bytes = "1.5.0"
+deadpool = "0.9"
 
 [dev-dependencies]
 criterion = "0.5"

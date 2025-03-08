@@ -1,0 +1,1 @@
+export DATABASE_URL=postgresql://fly:password@localhost:5432/fly_development_db

@@ -10,17 +10,12 @@ use super::swap_quote::SwapQuote;
 use super::token::{Token, TokenId};
 use super::{swap::Swap, world::World};
 
-pub fn world(pool_args: &[(&str, &str, &str, u64, u64)], balances: &[(&str, u128)]) -> World {
+pub fn world(pool_args: &[(&str, &str, &str, u64, u64)]) -> World {
     let pools: std::collections::HashSet<_> = pool_args
         .iter()
         .map(|(id, token0, token1, reserve0, reserve1)| {
             pool(id, token0, token1, *reserve0, *reserve1)
         })
-        .collect();
-
-    let balances: std::collections::HashMap<_, _> = balances
-        .iter()
-        .map(|(token, balance)| (TokenId::from(address_from_str(token)), U256::from(*balance)))
         .collect();
 
     World::new(&pools)

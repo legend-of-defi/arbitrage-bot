@@ -4,6 +4,7 @@ use crate::arb::cycle::Cycle;
 use crate::arb::swap_quote::SwapQuote;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CycleQuote {
     /// The quotes for each swap in the cycle
     swap_quotes: Vec<SwapQuote>,

@@ -87,12 +87,25 @@
     - name: Install base systemd service
       ansible.builtin.template:
         src: templates/base.service.j2
-        dest: /etc/systemd/system/base.service
+        dest: /etc/systemd/system/base-node.service
         mode: '0644'
 
     - name: Enable and start base service
       ansible.builtin.systemd:
-        name: base
+        name: base-node
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Install base execution systemd service
+      ansible.builtin.template:
+        src: templates/base-execution.service.j2
+        dest: /etc/systemd/system/base-execution.service
+        mode: '0644'
+
+    - name: Enable and start base execution service
+      ansible.builtin.systemd:
+        name: base-execution
         enabled: true
         state: started
         daemon_reload: true

@@ -9,4 +9,4 @@ CREATE TABLE tokens (
 );
 
 -- Index for address lookups
-CREATE INDEX idx_tokens_address ON tokens(address);
+CREATE UNIQUE INDEX idx_tokens_address ON tokens(address);

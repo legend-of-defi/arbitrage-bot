@@ -1,0 +1,20 @@
+[Unit]
+Description=Base Node Docker Compose
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=simple
+User=base
+Group=base
+WorkingDirectory=/home/base/node
+Environment=NETWORK_ENV=.env.mainnet
+
+ExecStart=/usr/bin/docker compose up node
+ExecStop=/usr/bin/docker compose down node
+
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

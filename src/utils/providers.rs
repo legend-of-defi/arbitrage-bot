@@ -1,5 +1,4 @@
-use eyre::{Report, Result};
-
+use eyre::Result;
 use futures::SinkExt;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{
@@ -27,7 +26,7 @@ use super::app_context::AppContext;
 pub async fn send_ws_request(
     ctx: &AppContext,
     request: String,
-) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>, Report> {
+) -> Result<WebSocketStream<MaybeTlsStream<TcpStream>>> {
     let (mut ws_stream, _) = connect_async(ctx.base_provider_websocket_url.clone()).await?;
     // Send the request
     ws_stream.send(Message::Text(request)).await?;

@@ -1,6 +1,6 @@
 use super::UniswapQuery;
 use crate::models::token::NewToken;
-use alloy::primitives::U256;
+use alloy::primitives::{Address, U256};
 
 #[derive(Debug)]
 pub struct TokenInfo {
@@ -12,7 +12,7 @@ pub struct TokenInfo {
 
 #[derive(Debug)]
 pub struct PairInfo {
-    pub address: String,
+    pub address: Address,
     pub token0: NewToken,
     pub token1: NewToken,
 }
@@ -20,21 +20,21 @@ pub struct PairInfo {
 impl From<UniswapQuery::PairInfo> for PairInfo {
     fn from(pair: UniswapQuery::PairInfo) -> Self {
         let token0 = NewToken::new(
-            pair.token0.tokenAddress.to_string(),
+            pair.token0.tokenAddress,
             Some(pair.token0.symbol),
             Some(pair.token0.name),
             i32::from(pair.token0.decimals),
         );
 
         let token1 = NewToken::new(
-            pair.token1.tokenAddress.to_string(),
+            pair.token1.tokenAddress,
             Some(pair.token1.symbol),
             Some(pair.token1.name),
             i32::from(pair.token1.decimals),
         );
 
         Self {
-            address: pair.pairAddress.to_string(),
+            address: pair.pairAddress,
             token0,
             token1,
         }

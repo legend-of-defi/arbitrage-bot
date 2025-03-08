@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn test_new_no_arbitrage() {
         // One pool P1 with A/B and 100/200 reserves, A 100 is our base token reserve
-        let market = world(&[("F1", "A", "B", 100, 200)], &[("A", 100)]);
+        let market = world(&[("F1", "A", "B", 100, 200)]);
 
         assert_eq!(market.token_vec, vec![token("A"), token("B")]);
 
@@ -306,14 +306,11 @@ mod tests {
         // Pool3: A/C with 120/300 reserves
         // A->B->C->A
         // We have balance of 100 token A
-        let market = world(
-            &[
-                ("F1", "A", "B", 100, 200),
-                ("F2", "B", "C", 200, 300),
-                ("F3", "A", "C", 120, 300),
-            ],
-            &[("A", 100)],
-        );
+        let market = world(&[
+            ("F1", "A", "B", 100, 200),
+            ("F2", "B", "C", 200, 300),
+            ("F3", "A", "C", 120, 300),
+        ]);
 
         assert_eq!(market.token_vec, vec![token("A"), token("B"), token("C")]);
 
@@ -345,30 +342,14 @@ mod tests {
                 vec![4, 5], // Token C's swaps: 4: C->A, 1: B->A
             ]
         );
-
-        let cycle1 = cycle(&[
-            ("F1", "A", "B", 100, 200),
-            ("F2", "B", "C", 200, 300),
-            ("F3", "C", "A", 300, 120),
-        ])
-        .unwrap();
-        let cycle2 = cycle(&[
-            ("F3", "A", "C", 120, 300),
-            ("F2", "C", "B", 300, 200),
-            ("F1", "B", "A", 200, 100),
-        ])
-        .unwrap();
     }
 
     #[test]
     fn test_new_cycle() {
-        let world = world(
-            &[
-                ("F1", "A", "B", 100, 200), // Pool1: A->B
-                ("F2", "A", "B", 300, 100), // Pool2: B->A
-            ],
-            &[("A", 100)],
-        );
+        let world = world(&[
+            ("F1", "A", "B", 100, 200), // Pool1: A->B
+            ("F2", "A", "B", 300, 100), // Pool2: B->A
+        ]);
 
         assert_eq!(world.token_vec, vec![token("A"), token("B")]);
 
@@ -400,10 +381,7 @@ mod tests {
 
     #[test]
     fn test_our_tokens() {
-        let world = world(
-            &[("F1", "A", "B", 100, 200), ("F2", "B", "C", 300, 100)],
-            &[("A", 100), ("C", 200)], // We have balances in A and C
-        );
+        let world = world(&[("F1", "A", "B", 100, 200), ("F2", "B", "C", 300, 100)]);
 
         assert_eq!(world.token_vec, vec![token("A"), token("B"), token("C")]);
     }
@@ -435,10 +413,7 @@ mod tests {
 
     #[test]
     fn test_find_cycles() {
-        let world = world(
-            &[("F1", "A", "B", 100, 200), ("F2", "A", "B", 100, 300)],
-            &[("A", 100)],
-        );
+        let world = world(&[("F1", "A", "B", 100, 200), ("F2", "A", "B", 100, 300)]);
 
         // The test expects to find both cycles
         assert_eq!(

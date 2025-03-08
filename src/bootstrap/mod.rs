@@ -1,11 +1,7 @@
 pub mod types;
-pub mod standalone_pool_monitoring;
 
 use crate::arb::pool::Pool;
 use crate::bootstrap::types::{PairInfo, Reserves};
-use crate::db_service::{DbManager, PairService};
-use crate::models::factory::NewFactory;
-use crate::models::token::NewToken;
 use crate::utils::app_context::AppContext;
 use crate::utils::constants::UNISWAP_V2_BATCH_QUERY_ADDRESS;
 
@@ -13,19 +9,28 @@ use alloy::{
     primitives::{Address, U256},
     sol,
 };
-use eyre::Report;
-use log::info;
+use bigdecimal::BigDecimal;
+use eyre::Error;
 use std::collections::HashSet;
-use std::ops::Add;
 use std::str::FromStr;
-use futures_util::future::join_all;
 
 sol!(
-    // #[allow(missing_docs)]
     #[sol(rpc)]
-    // UniswapQuery,
     "contracts/src/UniswapQuery.sol"
 );
+
+/// Convert a U256 to a f64
+///
+/// # Arguments
+/// * `value` - The U256 value to convert
+///
+/// # Returns
+/// The f64 value
+#[allow(dead_code)]
+fn u256_to_f64(value: U256) -> f64 {
+    let s: String = value.to_string(); // Convert U256 to string
+    s.parse::<f64>().unwrap_or(0.0) // Parse it into f64
+}
 
 /// Retrieves pairs within a specified index range from a factory contract
 ///
@@ -48,13 +53,13 @@ pub async fn fetch_pairs_v2_by_range(
     factory: Address,
     from: U256,
     to: U256,
-) -> Result<Vec<PairInfo>, Report> {
+) -> Result<Vec<PairInfo>, Error> {
     let uniswap_v2_batch_request =
         UniswapQuery::new(UNISWAP_V2_BATCH_QUERY_ADDRESS, &ctx.base_provider);
 
     Ok(uniswap_v2_batch_request
         .getPairsByIndexRange(factory, from, to)
-        .gas(30_000_000)
+        .gas(3_000_000_000)
         .call()
         .await?
         ._0
@@ -63,107 +68,79 @@ pub async fn fetch_pairs_v2_by_range(
         .collect())
 }
 
-/// Retrieves all pairs from a factory contract in batches
+/// Calculate reserves and USD value for a pair
 ///
 /// # Arguments
-/// * `factory` - The address of the factory contract
-/// * `batch_size` - Number of pairs to fetch in each batch
+/// * `pair` - Pair information
+/// * `reserve` - Reserves for the pair
 ///
 /// # Returns
-/// A vector of tuples containing Factory, Token0, Token1, and Pair information
-///
-/// # Errors
-/// * If HTTP provider creation fails
-/// * If contract calls fail
-/// * If database operations fail
-///
-/// # Panics
-/// * If application context creation fails
-/// * If database connection fails
-pub async fn fetch_all_pairs_v2_by_factory(
-    ctx: &mut AppContext,
-    factory: Address,
-    batch_size: u64,
-) -> Result<(), eyre::Report> {
-    // As discussed with pawel, we fetch all pairs
-    let mut start = U256::from(0);
+/// Tuple containing token0 reserve, token1 reserve, and USD value
+#[allow(dead_code)]
+fn calculate_reserves_and_usd(
+    pair: &PairInfo,
+    reserve: &Reserves,
+) -> (BigDecimal, BigDecimal, i32) {
+    // Calculate human-readable reserve values
+    let reserve0_decimal = u256_to_f64(reserve.reserve0) / 10_f64.powi(pair.token0.decimals());
+    let reserve1_decimal = u256_to_f64(reserve.reserve1) / 10_f64.powi(pair.token1.decimals());
 
-    let uniswap_v2_batch_request =
-        UniswapQuery::new(UNISWAP_V2_BATCH_QUERY_ADDRESS, &ctx.base_provider);
+    // Convert to BigDecimal for database storage
+    let token0_reserve =
+        BigDecimal::from_str(&reserve0_decimal.to_string()).unwrap_or_else(|_| BigDecimal::from(0));
+    let token1_reserve =
+        BigDecimal::from_str(&reserve1_decimal.to_string()).unwrap_or_else(|_| BigDecimal::from(0));
 
-    let pairs_len_block: U256 = uniswap_v2_batch_request
-        .allPairsLength(factory)
-        .gas(30_000_000)
-        .call()
-        .await?
-        ._0;
+    // Calculate USD value
+    let mut usd_value: i32 = 0;
 
-    let pairs_len_db = PairService::count_pairs_by_factory_address(&mut ctx.pg_connection, factory.to_string().as_str())?;
+    // Hardcoded token addresses and prices
+    let weth_address = "0x4200000000000000000000000000000000000006".to_lowercase();
+    let usdc_address = "0xd9fcd98c322942075a5c3860693e9f4f03aae07b".to_lowercase();
+    let usdt_address = "0x2f4d3d3f2f3d3f2f4d3d3f2f4d3d3f2f4d3d3f2f".to_lowercase();
+    let dai_address = "0x50c5725949a6f0c72e6c4a641f24049a917db0cb".to_lowercase();
 
-    // Get existing pair addresses to avoid duplicates
-    let existing_pairs = PairService::get_pair_addresses_by_factory(&mut ctx.pg_connection, factory.to_string())?;
-    let existing_pairs_set: HashSet<String> = HashSet::from_iter(existing_pairs);
+    // Check token0
+    let token0_address = pair.token0.address().to_string().to_lowercase();
+    let token0_symbol = pair.token0.symbol().unwrap_or_default().to_uppercase();
 
-    if U256::from(pairs_len_db).eq(&pairs_len_block) {
-        return Ok(());
-    }
-
-    info!("Start from index {start}, total pairs: {pairs_len_block}");
-
-    let mut fetch_pair_task = Vec::new();
-    while start < pairs_len_block {
-        let end = (start.add(U256::from(batch_size))).min(pairs_len_block);
-
-        // Process single batch
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        info!("Fetching pairs for range {start} to {end}");
-
-        fetch_pair_task.push(fetch_pairs_v2_by_range(ctx, factory, start, end));
-        info!("Add batch: {start} to {end}");
-
-        start = end;
-    }
-
-    let pair_batches = join_all(fetch_pair_task).await;
-
-    // Convert pairs to database format
-    let mut dex_infos = Vec::new();
-    let uniswap_factory = NewFactory {
-        address: factory.to_string(),
-        version: "2".parse()?,
-        fee: 300,
-        name: "Uniswap V2".parse()?,
+    let token0_price = match token0_address.as_str() {
+        addr if addr == weth_address || token0_symbol == "WETH" => 2118.14,
+        addr if addr == usdc_address || token0_symbol == "USDC" => 1.0,
+        addr if addr == usdt_address || token0_symbol == "USDT" => 1.0,
+        addr if addr == dai_address || token0_symbol == "DAI" => 1.0,
+        _ => 0.0,
     };
-    for pairs in pair_batches {
-        for pair in pairs? {
-            if existing_pairs_set.contains(&pair.address) {
-                continue;
-            }
 
-            let token0 = NewToken::new(
-                pair.token0.address.to_string(),
-                pair.token0.symbol,
-                pair.token0.name,
-                pair.token0.decimals,
-            );
-            let token1 = NewToken::new(
-                pair.token1.address.to_string(),
-                pair.token1.symbol,
-                pair.token1.name,
-                pair.token1.decimals,
-            );
-            dex_infos.push((
-                uniswap_factory.clone(),
-                token0,
-                token1,
-                pair.address.to_string(),
-            ));
+    if token0_price > 0.0 {
+        let token0_usd = reserve0_decimal * token0_price;
+        // Multiply by 2 to represent total reserve
+        let total_usd = token0_usd * 2.0;
+        usd_value = total_usd as i32; // Store as whole dollars
+    }
+
+    // Check token1 if token0 didn't match
+    if usd_value == 0 {
+        let token1_address = pair.token1.address().to_string().to_lowercase();
+        let token1_symbol = pair.token1.symbol().unwrap_or_default().to_uppercase();
+
+        let token1_price = match token1_address.as_str() {
+            addr if addr == weth_address || token1_symbol == "WETH" => 2118.14,
+            addr if addr == usdc_address || token1_symbol == "USDC" => 1.0,
+            addr if addr == usdt_address || token1_symbol == "USDT" => 1.0,
+            addr if addr == dai_address || token1_symbol == "DAI" => 1.0,
+            _ => 0.0,
+        };
+
+        if token1_price > 0.0 {
+            let token1_usd = reserve1_decimal * token1_price;
+            // Multiply by 2 to represent total reserve
+            let total_usd = token1_usd * 2.0;
+            usd_value = total_usd as i32; // Store as whole dollars
         }
     }
 
-    // Save batch to database
-    let _ = DbManager::batch_save_dex_info(&mut ctx.pg_connection, dex_infos);
-    Ok(())
+    (token0_reserve, token1_reserve, usd_value)
 }
 
 /// Retrieves reserves for a list of pairs
@@ -184,37 +161,20 @@ pub async fn fetch_all_pairs_v2_by_factory(
 /// * If batch request contract initialization fails
 pub async fn fetch_reserves_by_range(
     ctx: &AppContext,
-    pool_chunk: &[Pool],
-) -> Result<Vec<Pool>, eyre::Report> {
+    pairs: Vec<Address>,
+) -> Result<Vec<Reserves>, eyre::Report> {
     let uniswap_v2_batch_request =
         UniswapQuery::new(UNISWAP_V2_BATCH_QUERY_ADDRESS, &ctx.base_provider);
 
-    let pair_addresses: Vec<Address> = pool_chunk
-        .iter()
-        .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
-        .collect();
-    let mut pools_to_replace = Vec::new();
-
-    let reserves: Vec<Reserves> = uniswap_v2_batch_request
-        .getReservesByPairs(pair_addresses)
-        .gas(30_000_000)
+    Ok(uniswap_v2_batch_request
+        .getReservesByPairs(pairs)
+        .gas(3_000_000_000)
         .call()
         .await?
         ._0
         .into_iter()
         .map(Into::into)
-        .collect();
-
-    for (i, pool) in pool_chunk.iter().enumerate() {
-        let new_reserves = &reserves[i];
-
-        let mut updated_pool = pool.clone();
-        updated_pool.reserve0 = Some(new_reserves.reserve0);
-        updated_pool.reserve1 = Some(new_reserves.reserve1);
-        pools_to_replace.push(updated_pool);
-    }
-
-    Ok(pools_to_replace)
+        .collect())
 }
 
 /// Retrieves reserves for all pairs in the database
@@ -230,38 +190,141 @@ pub async fn fetch_reserves_by_range(
 /// * If HTTP provider creation fails
 /// * If contract calls fail
 /// * If pair addresses cannot be parsed
-pub async fn fetch_all_pools(ctx: &mut AppContext, batch_size: usize) -> Result<HashSet<Pool>, eyre::Report> {
+pub async fn fetch_all_pools(_ctx: &mut AppContext, _batch_size: usize) -> HashSet<Pool> {
+    todo!();
     // Create context in a block to drop PgConnection before async operations
-    let pools = PairService::load_all_pools(&mut ctx.pg_connection);
-    let pools_clone: Vec<Pool> = pools.iter().cloned().collect();
-    let mut result_pools = pools;
-    let mut pool_reserve_tasks = Vec::new();
+    // let pools = PairService::load_all_pools(&mut ctx.pg_connection);
+    // let pools_clone: Vec<Pool> = pools.iter().cloned().collect();
+    // let mut pools_to_replace = Vec::new();
+    // let mut result_pools = pools;
 
-    // Process pairs in batches sequentially
-    for pool_chunk in pools_clone.chunks(batch_size) {
-        pool_reserve_tasks.push(fetch_reserves_by_range(ctx, pool_chunk));
+    // let total_pools = pools_clone.len();
 
-        // Add delay between batches
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-    }
+    // // Create a progress bar
+    // let progress_bar = ProgressBar::new(total_pools as u64);
 
-    let pool_reserve_batch = join_all(pool_reserve_tasks).await;
-    for pool_reserves in pool_reserve_batch {
-        for pool in pool_reserves? {
-            if result_pools.remove(&pool) {
-                result_pools.insert(pool);
-            }
-        }
-    }
+    // // Set a custom style for the progress bar
+    // progress_bar.set_style(
+    //     ProgressStyle::default_bar()
+    //         .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({percent}%) - {msg}")
+    //         .unwrap()
+    //         .progress_chars("#>-")
+    // );
 
-    Ok(result_pools)
-}
+    // // Set initial message
+    // progress_bar.set_message("Starting pool reserve updates...");
 
-/// Start pool monitoring as a background task
-///
-/// This version completely avoids capturing any context references by creating a dedicated
-/// thread with its own tokio runtime and context instances.
-pub fn start_pool_monitoring(time_interval_by_sec: u64) -> Result<(), eyre::Error> {
-    // Just call our standalone version that doesn't need the context
-    crate::bootstrap::standalone_pool_monitoring::start_pool_monitoring(time_interval_by_sec)
+    // // Track start time
+    // let start_time = Instant::now();
+    // let mut updated_count = 0;
+    // let mut error_count = 0;
+
+    // // Process pairs in batches sequentially
+    // for (chunk_index, pool_chunk) in pools_clone.chunks(batch_size).enumerate() {
+    //     let chunk_start = chunk_index * batch_size;
+    //     let chunk_end = chunk_start + pool_chunk.len();
+
+    //     progress_bar.set_message(format!(
+    //         "Fetching reserves for batch {}/{} (pools {}-{})",
+    //         chunk_index + 1,
+    //         (total_pools as f64 / batch_size as f64).ceil() as usize,
+    //         chunk_start,
+    //         chunk_end
+    //     ));
+
+    //     let addresses: Vec<Address> = pool_chunk
+    //         .iter()
+    //         .map(|pair| Address::from_str(&pair.id.to_string()).unwrap())
+    //         .collect();
+
+    //     // Process single batch
+    //     let reserves = match fetch_reserves_by_range(ctx, addresses).await {
+    //         Ok(reserves) => reserves,
+    //         Err(e) => {
+    //             error!("Error fetching reserves: {e}");
+    //             // Update progress bar for skipped pools
+    //             progress_bar.inc(pool_chunk.len() as u64);
+    //             error_count += pool_chunk.len();
+    //             progress_bar.set_message(format!(
+    //                 "Error fetching reserves for batch {}: {}",
+    //                 chunk_index + 1,
+    //                 e
+    //             ));
+    //             continue;
+    //         }
+    //     };
+
+    //     progress_bar.set_message(format!(
+    //         "Processing batch {}/{} (pools {}-{})",
+    //         chunk_index + 1,
+    //         (total_pools as f64 / batch_size as f64).ceil() as usize,
+    //         chunk_start,
+    //         chunk_end
+    //     ));
+
+    //     for (i, pool) in pool_chunk.iter().enumerate() {
+    //         if i >= reserves.len() {
+    //             progress_bar.inc(1);
+    //             error_count += 1;
+    //             continue;
+    //         }
+
+    //         let new_reserves = &reserves[i];
+
+    //         // Remove old pool and insert updated one
+    //         if result_pools.remove(pool) {
+    //             let mut updated_pool = pool.clone();
+    //             updated_pool.reserve0 = Some(new_reserves.reserve0);
+    //             updated_pool.reserve1 = Some(new_reserves.reserve1);
+    //             pools_to_replace.push(updated_pool);
+    //             updated_count += 1;
+    //         } else {
+    //             error_count += 1;
+    //         }
+
+    //         // Update progress
+    //         progress_bar.inc(1);
+
+    //         // Calculate and display stats
+    //         let elapsed = start_time.elapsed();
+    //         let processed = progress_bar.position();
+    //         if processed > 0 {
+    //             let pools_per_second = processed as f64 / elapsed.as_secs_f64();
+    //             let remaining = total_pools as u64 - processed;
+    //             let eta_seconds = if pools_per_second > 0.0 {
+    //                 remaining as f64 / pools_per_second
+    //             } else {
+    //                 0.0
+    //             };
+
+    //             progress_bar.set_message(format!(
+    //                 "Batch {}/{} | Speed: {:.2} pools/sec | Updated: {} | Errors: {} | ETA: {:.2} min",
+    //                 chunk_index + 1,
+    //                 (total_pools as f64 / batch_size as f64).ceil() as usize,
+    //                 pools_per_second,
+    //                 updated_count,
+    //                 error_count,
+    //                 eta_seconds / 60.0
+    //             ));
+    //         }
+    //     }
+
+    //     // Add delay between batches
+    //     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    // }
+
+    // Finish the progress bar
+    // progress_bar.finish_with_message(format!(
+    //     "Pool reserve updates completed in {:.2} minutes! Updated: {} pools, Errors: {} pools",
+    //     start_time.elapsed().as_secs_f64() / 60.0,
+    //     updated_count,
+    //     error_count
+    // ));
+
+    // // Insert all updated pools at once (after iteration)
+    // for pool in pools_to_replace {
+    //     result_pools.insert(pool);
+    // }
+
+    // result_pools
 }

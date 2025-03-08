@@ -6,13 +6,15 @@
 //! - Ethereum Mainnet (local via IPC and remote via Infura)
 //! - Base Network (local via WebSocket and remote via Alchemy)
 
-use crate::utils::{db_connect::establish_connection, signer::Signer};
+use crate::utils::signer::Signer;
 use alloy::providers::fillers::{
     BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller,
 };
 use alloy::providers::{Identity, RootProvider};
-use diesel::PgConnection;
-use eyre::{Error, Report, Result};
+use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::AsyncPgConnection;
+use eyre::{Error, Result};
 use log::info;
 use std::env;
 
@@ -20,7 +22,6 @@ use alloy::{
     network::Ethereum,
     providers::{ProviderBuilder, WsConnect},
 };
-use url::Url;
 
 // There has to be a better way to do this
 type EthereumProvider = FillProvider<
@@ -38,10 +39,10 @@ pub struct AppContext {
     pub base_provider: EthereumProvider,
     /// WebSocket URL for Base network
     pub base_provider_websocket_url: String,
-    /// `PostgreSQL` database connection
-    pub pg_connection: PgConnection,
     /// Transaction signer
     pub signer: Signer,
+    /// Diesel async connection pool
+    pub db: diesel_async::pooled_connection::deadpool::Pool<AsyncPgConnection>,
 }
 
 impl AppContext {
@@ -54,14 +55,20 @@ impl AppContext {
     /// * If any of the provider connections fail
     /// * If required environment variables are missing
     pub async fn new() -> Result<Self, Error> {
+        let database_url =
+            env::var("DATABASE_URL").unwrap_or_else(|_| "postgres://fly:fly@/tmp/fly".to_string());
+
+        let config = AsyncDieselConnectionManager::<AsyncPgConnection>::new(database_url);
+        let pool = Pool::builder(config).build().map_err(|e| eyre::eyre!(e))?;
+
         // Create base provider using the existing method
         let base_provider = Self::create_new_provider().await?;
 
         Ok(Self {
             base_provider,
             base_provider_websocket_url: Self::base_provider_websocket_url(),
-            pg_connection: establish_connection()?,
             signer: Signer::new("/tmp/fly.sock"),
+            db: pool,
         })
     }
 
@@ -74,16 +81,22 @@ impl AppContext {
     /// This returns a concrete provider type suitable for contract calls.
     ///
     /// # Returns
-    /// * `Result<impl Provider<Ethereum>, Report>` - The provider
+    /// * `Result<impl Provider<Ethereum>>` - The provider
     ///
     /// # Errors
     /// * If connection fails
     /// * If provider initialization fails
-    pub async fn create_new_provider() -> Result<EthereumProvider, Report> {
+    pub async fn create_new_provider() -> Result<EthereumProvider> {
         if let Ok(api_key) = env::var("FLY_ALCHEMY_API_KEY") {
             info!("Using remote provider with API key {}", api_key);
-            let url = Url::parse(&format!("https://base-mainnet.g.alchemy.com/v2/{api_key}"))?;
-            Ok(ProviderBuilder::new().on_http(url))
+            let ws_url =
+                "wss://base-mainnet.g.alchemy.com/v2/pzwXUHHsvHjgeSCT5rW_whOyYo7kas4d".to_string();
+            let ws = WsConnect::new(&ws_url);
+            Ok(ProviderBuilder::new().on_ws(ws).await?)
+        } else if let Ok(ws_url) = env::var("RPC_WS_URL") {
+            info!("Using WebSocket provider at {}", ws_url);
+            let ws = WsConnect::new(&ws_url);
+            Ok(ProviderBuilder::new().on_ws(ws).await?)
         } else {
             let ws_url = Self::base_provider_websocket_url();
             info!("Using WebSocket provider at {}", ws_url);

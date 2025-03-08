@@ -238,10 +238,7 @@ impl Cycle {
 
         // Check for duplicate tokens (vertices)
         let mut token_counts = HashMap::new();
-        for i in 0..swaps.len() {
-            let swap = &swaps[i];
-            let next = &swaps[(i + 1) % swaps.len()];
-
+        for swap in swaps {
             // Count token0 as input token for current swap
             *token_counts.entry(swap.token_in).or_insert(0) += 1;
             // Count token1 as output token for current swap and input for next swap

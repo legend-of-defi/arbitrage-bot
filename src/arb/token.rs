@@ -2,6 +2,7 @@
 /// Here, mostly for type safety.
 use alloy::primitives::Address;
 use core::fmt::{self, Debug};
+use eyre::Result;
 use std::fmt::Display;
 
 /// Globally unique identifier for a token to distinguish between different chains
@@ -9,13 +10,13 @@ use std::fmt::Display;
 pub struct TokenId(pub Address);
 
 impl TryFrom<&str> for TokenId {
-    type Error = String;
+    type Error = eyre::Error;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
+    fn try_from(s: &str) -> Result<Self> {
         // Parse the string as an Address
         Address::parse_checksummed(s, None)
             .map(Self)
-            .map_err(|e| format!("Invalid token address: {e}"))
+            .map_err(|e| eyre::eyre!("Invalid token address: {e}"))
     }
 }
 
@@ -40,9 +41,9 @@ impl Debug for TokenId {
 }
 
 impl TryFrom<String> for TokenId {
-    type Error = String;
+    type Error = eyre::Error;
 
-    fn try_from(s: String) -> Result<Self, Self::Error> {
+    fn try_from(s: String) -> Result<Self> {
         Self::try_from(s.as_str())
     }
 }

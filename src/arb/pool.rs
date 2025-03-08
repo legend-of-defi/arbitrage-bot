@@ -3,6 +3,7 @@ use std::fmt::{self, Debug, Display};
 use std::hash::{Hash, Hasher};
 
 use alloy::primitives::{Address, U256};
+use eyre::Result;
 
 use super::token::TokenId;
 
@@ -26,20 +27,20 @@ impl Debug for PoolId {
 }
 
 impl TryFrom<&str> for PoolId {
-    type Error = String;
+    type Error = eyre::Error;
 
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
+    fn try_from(s: &str) -> Result<Self> {
         // Parse the string as an Address
         Address::parse_checksummed(s, None)
             .map(Self)
-            .map_err(|e| format!("Invalid pool address: {e}"))
+            .map_err(|e| eyre::eyre!("Invalid pool address: {e}"))
     }
 }
 
 impl TryFrom<String> for PoolId {
-    type Error = String;
+    type Error = eyre::Error;
 
-    fn try_from(s: String) -> Result<Self, Self::Error> {
+    fn try_from(s: String) -> Result<Self> {
         Self::try_from(s.as_str())
     }
 }

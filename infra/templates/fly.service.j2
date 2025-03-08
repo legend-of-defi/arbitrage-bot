@@ -7,13 +7,16 @@ Type=simple
 User=fly
 Group=fly
 EnvironmentFile=/etc/default/fly.env
-ExecStart=/usr/bin/fly
+ExecStart=/usr/bin/fly start
 LogsDirectory=fly
 LogsDirectoryMode=0755
 RuntimeDirectory=fly
 RuntimeDirectoryMode=0755
 Restart=on-failure
 RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LogLevelMax=debug
 
 [Install]
 WantedBy=multi-user.target

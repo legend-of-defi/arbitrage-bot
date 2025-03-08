@@ -1,23 +1,64 @@
+use alloy::primitives::Address;
 use diesel::{Insertable, Queryable, Selectable};
+
+use super::pair::DBAddress;
 
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = crate::schemas::tokens)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Token {
-    pub id: i32,
-    pub address: String,
-    pub symbol: Option<String>,
-    pub name: Option<String>,
-    pub decimals: i32,
+    id: i32,
+    address: DBAddress,
+    symbol: Option<String>,
+    name: Option<String>,
+    decimals: Option<i32>,
+}
+
+impl Token {
+    pub fn new(
+        id: i32,
+        address: Address,
+        symbol: Option<String>,
+        name: Option<String>,
+        decimals: Option<i32>,
+    ) -> Self {
+        Self {
+            id,
+            address: DBAddress::new(address),
+            symbol,
+            name,
+            decimals,
+        }
+    }
+
+    pub fn address(&self) -> Address {
+        self.address.value
+    }
+
+    pub fn id(&self) -> i32 {
+        self.id
+    }
+
+    pub fn symbol(&self) -> Option<String> {
+        self.symbol.as_deref().map(|s| s.to_string())
+    }
+
+    pub fn decimals(&self) -> Option<i32> {
+        self.decimals
+    }
+
+    pub fn name(&self) -> Option<String> {
+        self.name.as_deref().map(|n| n.to_string())
+    }
 }
 
 #[derive(Insertable, Clone, Debug)]
 #[diesel(table_name = crate::schemas::tokens)]
 pub struct NewToken {
-    pub address: String,
-    pub symbol: Option<String>,
-    pub name: Option<String>,
-    pub decimals: i32,
+    address: DBAddress,
+    symbol: Option<String>,
+    name: Option<String>,
+    decimals: i32,
 }
 
 impl NewToken {
@@ -35,17 +76,33 @@ impl NewToken {
     /// * Returns a new `NewToken` instance with sanitized `symbol` and `name` (if they were provided),
     ///   and the provided `address` and `decimals` values.
     pub fn new(
-        address: String,
+        address: Address,
         symbol: Option<String>,
         name: Option<String>,
         decimals: i32,
     ) -> Self {
         Self {
-            address,
+            address: DBAddress::new(address),
             symbol: symbol.map(|s| sanitize_string(&s)),
             name: name.map(|n| sanitize_string(&n)),
             decimals,
         }
+    }
+
+    pub fn address(&self) -> Address {
+        self.address.value
+    }
+
+    pub fn symbol(&self) -> Option<String> {
+        self.symbol.as_deref().map(|s| s.to_string())
+    }
+
+    pub fn name(&self) -> Option<String> {
+        self.name.as_deref().map(|n| n.to_string())
+    }
+
+    pub fn decimals(&self) -> i32 {
+        self.decimals
     }
 }
 
@@ -65,6 +122,8 @@ fn sanitize_string(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::constants::WETH;
+
     use super::*;
 
     // Test sanitization function
@@ -88,17 +147,22 @@ mod tests {
     // Test NewToken::new methodca
     #[test]
     fn test_new_token_creation_with_sanitization() {
-        let token = NewToken {
-            address: "0x1234".to_string(),
-            symbol: Some("ETH\0".to_string()), // Contains null byte
-            name: Some("Ethereum\0".to_string()), // Contains null byte
-            decimals: 18,
-        };
+        let token = NewToken::new(
+            WETH,
+            Some("ETH\0".to_string()),      // Contains null byte
+            Some("Ethereum\0".to_string()), // Contains null byte
+            18,
+        );
 
-        let new_token = NewToken::new(token.address, token.symbol, token.name, token.decimals);
+        let new_token = NewToken::new(
+            token.address.value,
+            token.symbol,
+            token.name,
+            token.decimals,
+        );
 
         // Verify that the sanitization worked
-        assert_eq!(new_token.address, "0x1234");
+        assert_eq!(new_token.address.value, WETH);
 
         // Check that the symbol and name have been sanitized
         assert_eq!(new_token.symbol, Some("ETH".to_string())); // Null byte removed
@@ -109,16 +173,16 @@ mod tests {
     // Test with None for symbol and name (no sanitization needed)
     #[test]
     fn test_new_token_creation_with_none_values() {
-        let token = NewToken {
-            address: "0x5678".to_string(),
-            symbol: None,
-            name: None,
-            decimals: 6,
-        };
+        let token = NewToken::new(WETH, None, None, 6);
 
-        let new_token = NewToken::new(token.address, token.symbol, token.name, token.decimals);
+        let new_token = NewToken::new(
+            token.address.value,
+            token.symbol,
+            token.name,
+            token.decimals,
+        );
 
-        assert_eq!(new_token.address, "0x5678");
+        assert_eq!(new_token.address.value, WETH);
         assert_eq!(new_token.symbol, None); // No sanitization or modification needed
         assert_eq!(new_token.name, None); // No sanitization or modification needed
         assert_eq!(new_token.decimals, 6);

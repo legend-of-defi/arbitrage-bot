@@ -4,7 +4,10 @@ CREATE TABLE pairs (
     address VARCHAR NOT NULL UNIQUE,
     token0_id INTEGER NOT NULL REFERENCES tokens(id),
     token1_id INTEGER NOT NULL REFERENCES tokens(id),
-    factory_id INTEGER NOT NULL REFERENCES factories(id)
+    factory_id INTEGER NOT NULL REFERENCES factories(id),
+    reserve0 NUMERIC NOT NULL DEFAULT 0,
+    reserve1 NUMERIC NOT NULL DEFAULT 0,
+    usd INTEGER NOT NULL DEFAULT 0
 );
 
 -- Index for factory relationship
