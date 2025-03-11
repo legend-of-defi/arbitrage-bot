@@ -41,10 +41,10 @@ enum Commands {
     SyncPairCreatedEvents,
     /// [DEBUG] Sync exchange rates
     SyncExchangeRates,
-    /// [DEBUG] Benchmark Modified Bellman Ford
-    BenchmarkMBF,
-    /// [DEBUG] Benchmark DFS
-    BenchmarkDFS,
+    // /// [DEBUG] Benchmark Modified Bellman Ford
+    // BenchmarkMBF,
+    // /// [DEBUG] Benchmark DFS
+    // BenchmarkDFS,
     /// Start the bot
     Start,
 }
