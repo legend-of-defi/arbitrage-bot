@@ -81,9 +81,9 @@ async fn main() -> Result<()> {
         Some(Commands::SyncExchangeRates) => {
             sync::exchange_rates(&ctx).await?;
         }
-        Some(Commands::BenchmarkMBF) => {
+        // Some(Commands::BenchmarkMBF) => {
             
-        }
+        // }
         Some(Commands::Start) => {
             bot::start(ctx).await?;
         }
