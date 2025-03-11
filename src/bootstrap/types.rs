@@ -24,6 +24,9 @@ impl From<UniswapQuery::PairInfo> for PairInfo {
             Some(pair.token0.symbol),
             Some(pair.token0.name),
             i32::from(pair.token0.decimals),
+            None,
+            None,
+            None,
         );
 
         let token1 = NewToken::new(
@@ -31,6 +34,9 @@ impl From<UniswapQuery::PairInfo> for PairInfo {
             Some(pair.token1.symbol),
             Some(pair.token1.name),
             i32::from(pair.token1.decimals),
+            None,
+            None,
+            None,
         );
 
         Self {

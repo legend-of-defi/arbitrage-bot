@@ -76,45 +76,56 @@ pub async fn start(ctx: AppContext) -> Result<()> {
     // Spawn events sync task
     let ctx1 = Arc::clone(&ctx);
     tokio::spawn(async move {
-        log::info!("Starting events sync task");
         if let Err(e) = sync::events(&ctx1).await {
-            log::error!("Error in events sync task: {e}");
+            log::error!("{}", e);
         }
     });
 
     // Spawn reserve sync task
     let ctx2 = Arc::clone(&ctx);
     tokio::spawn(async move {
-        log::info!("Starting reserve sync task");
         if let Err(e) = sync::reserves(&ctx2).await {
-            log::error!("Error in reserve sync task: {e}");
+            log::error!("{}", e);
         }
     });
 
     // Spawn pair tokens sync task
     let ctx3 = Arc::clone(&ctx);
     tokio::spawn(async move {
-        log::info!("Starting pair tokens sync task");
         if let Err(e) = sync::pair_tokens(&ctx3).await {
-            log::error!("Error in pair tokens sync task: {e}");
+            log::error!("{}", e);
         }
     });
 
     // Spawn factories sync task
     let ctx4 = Arc::clone(&ctx);
     tokio::spawn(async move {
-        log::info!("Starting factory pairs sync task");
         if let Err(e) = sync::factories(&ctx4).await {
-            log::error!("Error in factories sync task: {e}");
+            log::error!("{}", e);
         }
     });
 
     // Spawn USD value sync task
     let ctx5 = Arc::clone(&ctx);
     tokio::spawn(async move {
-        log::info!("Starting USD value sync task");
         if let Err(e) = sync::usd(&ctx5).await {
-            log::error!("Error in USD value sync task: {e}");
+            log::error!("{}", e);
+        }
+    });
+
+    // Spawn exchange rates sync task
+    let ctx6 = Arc::clone(&ctx);
+    tokio::spawn(async move {
+        if let Err(e) = sync::exchange_rates(&ctx6).await {
+            log::error!("{}", e);
+        }
+    });
+
+    // Spawn factory pairs sync task
+    let ctx7 = Arc::clone(&ctx);
+    tokio::spawn(async move {
+        if let Err(e) = sync::factory_pairs(&ctx7).await {
+            log::error!("{}", e);
         }
     });
 

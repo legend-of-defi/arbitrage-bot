@@ -12,7 +12,6 @@ use diesel::QueryDsl;
 use diesel::SelectableHelper;
 use diesel_async::RunQueryDsl;
 use eyre::Result;
-use log::info;
 use std::str::FromStr;
 
 /// Update pairs with missing reserves.
@@ -48,11 +47,6 @@ async fn sync(ctx: &AppContext, batch_size: i16) -> Result<usize> {
         .limit(i64::from(batch_size))
         .load::<Pair>(&mut conn)
         .await?;
-
-    info!(
-        "Fetching reserves by range range from {} to {:?}",
-        batch_size, pairs_missing_reserves
-    );
 
     // Get addresses of pairs with missing reserves
     let pair_addresses: Vec<Address> = pairs_missing_reserves

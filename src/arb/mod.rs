@@ -1,4 +1,4 @@
-mod cycle;
+pub mod cycle;
 mod cycle_quote;
 pub mod pool;
 mod portfolio;

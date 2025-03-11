@@ -39,6 +39,12 @@ enum Commands {
     SyncUsd,
     /// [DEBUG] Sync PairCreated events
     SyncPairCreatedEvents,
+    /// [DEBUG] Sync exchange rates
+    SyncExchangeRates,
+    /// [DEBUG] Benchmark Modified Bellman Ford
+    BenchmarkMBF,
+    /// [DEBUG] Benchmark DFS
+    BenchmarkDFS,
     /// Start the bot
     Start,
 }
@@ -61,7 +67,7 @@ async fn main() -> Result<()> {
             sync::pair_tokens(&ctx).await?;
         }
         Some(Commands::SyncFactoryPairs) => {
-            // sync::factory_pairs(&ctx).await?;
+            sync::factory_pairs(&ctx).await?;
         }
         Some(Commands::SyncFactories) => {
             sync::factories(&ctx).await?;
@@ -71,6 +77,12 @@ async fn main() -> Result<()> {
         }
         Some(Commands::SyncPairCreatedEvents) => {
             sync::pair_created_events(&ctx).await?;
+        }
+        Some(Commands::SyncExchangeRates) => {
+            sync::exchange_rates(&ctx).await?;
+        }
+        Some(Commands::BenchmarkMBF) => {
+            
         }
         Some(Commands::Start) => {
             bot::start(ctx).await?;

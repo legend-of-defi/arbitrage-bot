@@ -8,3 +8,4 @@ pub mod models;
 pub mod schemas;
 pub mod sync;
 pub mod utils;
+pub mod benchmark;

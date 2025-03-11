@@ -51,8 +51,8 @@ async fn sync(ctx: &AppContext, limit: i64) -> Result<usize> {
         .await?;
 
     info!(
-        "sync::pair_tokens(): Found {:?} pairs missing tokens info",
-        pairs
+        "sync::pair_tokens(): Found {} pairs missing tokens info",
+        pairs.len()
     );
     for pair in pairs.iter().as_ref() {
         // Read token addresses from pair contract
