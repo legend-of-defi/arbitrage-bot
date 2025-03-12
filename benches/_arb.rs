@@ -1,8 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-pub fn benchmark_triangular_cycles(_: &mut Criterion) {
-
-}
+pub fn benchmark_triangular_cycles(_: &mut Criterion) {}
 //     let mut group = c.benchmark_group("arbitrage");
 
 //     for size in [1000, 5000, 10000].iter() {
