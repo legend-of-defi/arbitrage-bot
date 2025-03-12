@@ -2,7 +2,7 @@ pub mod cycle;
 mod cycle_quote;
 pub mod pool;
 mod portfolio;
-mod swap;
+pub mod swap;
 pub mod swap_quote;
 mod test_helpers;
 pub mod token;

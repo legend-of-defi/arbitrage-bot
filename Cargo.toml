@@ -33,6 +33,29 @@ bytes = "1.5.0"
 deadpool = "0.9"
 rand = "0.9.0"
 
+[lints.rust]
+missing_docs = "warn"
+unused_imports = "warn"
+unused_variables = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+missing_panics_doc = "warn"
+missing_errors_doc = "warn"
+missing_docs_in_private_items = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+panic_in_result_fn = "warn"
+must_use_candidate = "warn"
+
+# src/schemas.rs is auto-generated with wildcard imports. No way to disable this warning selectively
+wildcard_imports = { level = "allow", priority = 1 }
+#
+#similar_names = { level = "allow", priority =1 }
+
 [dev-dependencies]
 criterion = "0.5"
 

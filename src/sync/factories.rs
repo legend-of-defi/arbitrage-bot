@@ -19,6 +19,12 @@ sol! {
     "contracts/src/interfaces/IUniswapV2Pair.sol"
 }
 
+/// Sync factories for pairs
+/// # Errors
+/// Returns an error if the database connection fails
+///
+/// # Returns
+/// Returns the number of pairs synced
 pub async fn factories(ctx: &AppContext) -> Result<()> {
     log::info!("sync::factories: Starting factories sync...");
 
@@ -31,6 +37,12 @@ pub async fn factories(ctx: &AppContext) -> Result<()> {
     }
 }
 
+/// Sync factories for a batch of pairs
+/// # Errors
+/// Returns an error if the database connection fails
+///
+/// # Returns
+/// Returns the number of pairs synced
 async fn sync(ctx: &AppContext, limit: i64) -> Result<usize> {
     let mut conn = ctx.db.get().await?;
 

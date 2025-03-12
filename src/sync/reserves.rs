@@ -37,6 +37,16 @@ pub async fn reserves(ctx: &AppContext) -> Result<()> {
     }
 }
 
+/// Sync pairs with missing reserves
+///
+/// This function queries the database for pairs that don't have reserves,
+/// and then fetches the reserves for those pairs.
+///
+/// # Errors
+/// Returns an error if the database connection fails
+///
+/// # Returns
+/// Returns the number of pairs synced
 async fn sync(ctx: &AppContext, batch_size: i16) -> Result<usize> {
     let mut conn = ctx.db.get().await?;
 
@@ -48,15 +58,40 @@ async fn sync(ctx: &AppContext, batch_size: i16) -> Result<usize> {
         .load::<Pair>(&mut conn)
         .await?;
 
+    log::info!(
+        "sync::reserves: Found {} pairs with missing reserves",
+        pairs_missing_reserves.len()
+    );
+
+    if pairs_missing_reserves.is_empty() {
+        log::info!("sync::reserves: No pairs with missing reserves, nothing to do");
+        return Ok(0);
+    }
+
     // Get addresses of pairs with missing reserves
     let pair_addresses: Vec<Address> = pairs_missing_reserves
         .iter()
         .map(crate::models::pair::Pair::address)
         .collect();
 
+    log::info!(
+        "sync::reserves: First 5 pair addresses: {:?}",
+        pair_addresses.iter().take(5).collect::<Vec<_>>()
+    );
+
     // Fetch reserves for these pairs
+    log::info!(
+        "sync::reserves: Fetching reserves for {} pairs...",
+        pair_addresses.len()
+    );
     let reserves = match fetch_reserves_by_range(ctx, pair_addresses.clone()).await {
-        Ok(reserves) => reserves,
+        Ok(reserves) => {
+            log::info!(
+                "sync::reserves: Successfully fetched reserves for {} pairs",
+                reserves.len()
+            );
+            reserves
+        }
         Err(e) => {
             log::error!("sync::reserves: Error fetching reserves: {e}");
             return Err(e);
@@ -64,7 +99,17 @@ async fn sync(ctx: &AppContext, batch_size: i16) -> Result<usize> {
     };
 
     // Update pairs with reserves
+    let mut updated_count = 0;
     for (index, pair) in pairs_missing_reserves.iter().enumerate() {
+        if index >= reserves.len() {
+            log::error!(
+                "sync::reserves: Reserves index out of bounds: {}/{}",
+                index,
+                reserves.len()
+            );
+            break;
+        }
+
         let reserve = &reserves[index];
         let reserve0_val = BigDecimal::from_str(&reserve.reserve0.to_string())
             .unwrap_or_else(|_| BigDecimal::from(0));
@@ -80,13 +125,18 @@ async fn sync(ctx: &AppContext, batch_size: i16) -> Result<usize> {
             .execute(&mut conn)
             .await?;
 
-        log::debug!(
+        log::info!(
             "sync::reserves: Updated pair {} with reserve0: {}, reserve1: {}",
             pair.address(),
             reserve0_val,
             reserve1_val,
         );
+        updated_count += 1;
     }
 
-    Ok(pairs_missing_reserves.len())
+    log::info!(
+        "sync::reserves: Updated {} pairs with reserves",
+        updated_count
+    );
+    Ok(updated_count)
 }

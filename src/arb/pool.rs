@@ -60,10 +60,15 @@ impl Display for PoolId {
 /// Pool as it comes from the database or Sync events
 #[derive(Debug, Clone, Eq)]
 pub struct Pool {
+    /// The address of the pool
     pub id: PoolId,
+    /// The first token in the pool
     pub token0: TokenId,
+    /// The second token in the pool
     pub token1: TokenId,
+    /// The reserve of the first token
     pub reserve0: Option<U256>,
+    /// The reserve of the second token
     pub reserve1: Option<U256>,
 }
 
@@ -84,6 +89,8 @@ impl Hash for Pool {
 }
 
 impl Pool {
+    /// Create a new pool
+    #[must_use]
     pub const fn new(
         id: PoolId,
         token0: TokenId,

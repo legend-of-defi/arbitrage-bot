@@ -15,6 +15,7 @@ use std::str::FromStr;
 ///
 /// The wallet connects to an EVM-compatible chain through a provider and
 /// can query token information and balances.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Wallet {
     /// The wallet's address
@@ -55,6 +56,7 @@ impl Wallet {
     /// * If `FLY_BASE_WALLET_ADDRESS` environment variable is not set
     /// * If wallet address is invalid
     /// * If token name query fails
+    #[allow(dead_code)]
     pub async fn new(
         provider: RootProvider<Ethereum>,
         token_address: Address,
@@ -84,6 +86,7 @@ impl Wallet {
     ///
     /// # Errors
     /// * If balance query to ERC20 contract fails
+    #[allow(dead_code)]
     pub async fn update_balance(&mut self) -> Result<()> {
         let erc20 = ERC20::new(self.token_address, self.provider.clone());
         self.balance = Some(erc20.balanceOf(self.address).call().await?.balance);

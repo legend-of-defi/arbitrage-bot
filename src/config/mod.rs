@@ -2,14 +2,19 @@ use std::env;
 
 /// Configuration struct for the application
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Config {
+    /// Database URL
     pub database_url: String,
+    /// RPC URL
     pub rpc_url: String,
+    /// IPC Path
     pub ipc_path: String,
 }
 
 impl Config {
     /// Default values for configuration
+    #[allow(dead_code)]
     fn defaults() -> Self {
         let default_ipc_path = if cfg!(windows) {
             r"\\.\pipe\mev_eth"
@@ -37,6 +42,8 @@ impl Config {
     ///
     /// # Returns
     /// Returns `Config` with values from environment variables or defaults
+    #[must_use]
+    #[allow(dead_code)]
     pub fn from_env() -> Self {
         let defaults = Self::defaults();
 
@@ -49,6 +56,8 @@ impl Config {
 
     /// Create a test configuration
     #[cfg(test)]
+    #[must_use]
+    #[allow(dead_code)]
     pub fn test_config() -> Self {
         Self::defaults()
     }

@@ -24,6 +24,8 @@ sol! {
 ///
 /// This function retrieves factory addresses from the database
 /// and then fetches all pairs created by each factory.
+/// # Errors
+/// Returns an error if the database connection fails
 pub async fn factory_pairs(ctx: &AppContext) -> Result<()> {
     log::info!("sync::factory_pairs: Starting factory pairs sync...");
 
@@ -36,6 +38,16 @@ pub async fn factory_pairs(ctx: &AppContext) -> Result<()> {
     }
 }
 
+/// Syncs pairs created by factories
+///
+/// This function retrieves factory addresses from the database
+/// and then fetches all pairs created by each factory.
+/// # Errors
+/// Returns an error if the database connection fails
+///
+/// # Returns
+/// Returns the number of pairs synced
+#[allow(clippy::too_many_lines)]
 async fn sync(ctx: &AppContext) -> Result<usize> {
     let mut conn = ctx.db.get().await?;
 
@@ -92,7 +104,10 @@ async fn sync(ctx: &AppContext) -> Result<usize> {
     let multicall_batch_size = 100;
 
     // Calculate how many pairs to fetch
+    // SAFETY: database ids are unsigned
+    #[allow(clippy::cast_sign_loss)]
     let start_id = factory.last_pair_id() as usize;
+    #[allow(clippy::cast_sign_loss)]
     let end_id = std::cmp::min(pairs_length as usize, start_id + multicall_batch_size);
     let pair_indexes = (start_id..end_id).collect::<Vec<usize>>();
 
@@ -153,6 +168,9 @@ async fn sync(ctx: &AppContext) -> Result<usize> {
     }
 
     // Update factory's last_pair_id
+    // SAFETY: database ids are unsigned
+    #[allow(clippy::cast_possible_wrap)]
+    #[allow(clippy::cast_possible_truncation)]
     diesel::update(factories::table)
         .filter(factories::id.eq(factory.id()))
         .set(factories::last_pair_id.eq(end_id as i32))

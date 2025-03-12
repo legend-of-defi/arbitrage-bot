@@ -13,12 +13,17 @@ use diesel::{ExpressionMethods, Insertable};
 use diesel_async::AsyncPgConnection;
 use diesel_async::RunQueryDsl;
 
+/// The status of a factory
 #[derive(Debug, Clone, Copy, PartialEq, Eq, AsExpression, FromSqlRow)]
 #[diesel(sql_type = crate::schemas::sql_types::FactoryStatus)]
 pub enum FactoryStatus {
+    /// The factory is not fully synced yet - workers are still working on it
     Unsynced,
+    /// The factory is syncing at this moment
     Syncing,
+    /// The factory is fully synced - workers have finished working on it
     Synced,
+    /// The factory is broken - workers have failed to sync it due to reverts
     Broken,
 }
 
@@ -67,43 +72,49 @@ impl FromSql<crate::schemas::sql_types::FactoryStatus, Pg> for FactoryStatus {
 use crate::schemas::factories;
 
 use super::pair::DBAddress;
+
+/// A Uniswap V2 factory
 #[derive(Queryable, Selectable, Debug)]
 #[diesel(table_name = crate::schemas::factories)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Factory {
+    /// The ID of the factory
     id: i32,
+    /// The address of the factory
     address: DBAddress,
+    /// The last pair ID of the factory
     last_pair_id: i32,
+    /// The status of the factory
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     status: FactoryStatus,
 }
 
 impl Factory {
-    pub fn new(id: i32, address: Address) -> Self {
-        Self {
-            id,
-            address: DBAddress::new(address),
-            last_pair_id: 0,
-            status: FactoryStatus::Unsynced,
-        }
-    }
-
+    /// Get the ID of the factory
+    #[must_use]
     pub fn id(&self) -> i32 {
         self.id
     }
 
+    /// Get the address of the factory
+    #[must_use]
     pub fn address(&self) -> Address {
         self.address.value
     }
 
+    /// Get the last pair ID of the factory
+    #[must_use]
     pub fn last_pair_id(&self) -> i32 {
         self.last_pair_id
     }
 
-    pub fn status(&self) -> FactoryStatus {
-        self.status
-    }
-
     /// Update the status of the factory
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database update fails
     pub async fn update_status(
         &mut self,
         conn: &mut AsyncPgConnection,
@@ -119,14 +130,19 @@ impl Factory {
     }
 }
 
+/// A new factory
 #[derive(Insertable, Clone, Debug)]
 #[diesel(table_name = crate::schemas::factories)]
 pub struct NewFactory {
+    /// The address of the factory
     address: DBAddress,
+    /// The last pair ID of the factory
     last_pair_id: Option<i32>,
 }
 
 impl NewFactory {
+    /// Create a new factory
+    #[must_use]
     pub fn new(address: Address) -> Self {
         Self {
             address: DBAddress::new(address),
@@ -134,10 +150,14 @@ impl NewFactory {
         }
     }
 
+    /// The address of the factory
+    #[must_use]
     pub fn address(&self) -> Address {
         self.address.value
     }
 
+    /// The last pair ID of the factory
+    #[must_use]
     pub fn last_pair_id(&self) -> Option<i32> {
         self.last_pair_id
     }

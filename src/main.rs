@@ -1,31 +1,41 @@
-#![allow(dead_code)]
+#![doc = "Fly - Blockchain Arbitrage Detection and Execution CLI"]
 
+/// Main entry point for the application
 use crate::utils::app_context::AppContext;
 use crate::utils::logger::setup_logger;
 use clap::{Parser, Subcommand};
 use eyre::Result;
 
 mod arb;
+/// System initialization and startup procedures
 mod bootstrap;
+/// Arbitrage detection and execution logic
 mod bot;
+/// Configuration management for the system
 mod config;
-mod db_service;
+/// Data models for the application
 mod models;
+/// Notification system
 mod notify;
+/// Database schema definitions
 mod schemas;
+/// Blockchain synchronization components
 mod sync;
+/// Utility functions and helpers
 mod utils;
 
+/// Command line interface
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
+    /// Subcommand to execute
     #[command(subcommand)]
     command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// [DEBUG] Sync Sync events
+    /// [DEBUG] Sync `Sync` events
     SyncSyncEvents,
     /// [DEBUG] Sync pairs with missing reserves
     SyncReserves,
@@ -37,21 +47,17 @@ enum Commands {
     SyncFactories,
     /// [DEBUG] Sync USD values for pairs
     SyncUsd,
-    /// [DEBUG] Sync PairCreated events
+    /// [DEBUG] Sync `PairCreated` events
     SyncPairCreatedEvents,
     /// [DEBUG] Sync exchange rates
     SyncExchangeRates,
-    // /// [DEBUG] Benchmark Modified Bellman Ford
-    // BenchmarkMBF,
-    // /// [DEBUG] Benchmark DFS
-    // BenchmarkDFS,
     /// Start the bot
     Start,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    setup_logger().expect("Failed to set up logger");
+    setup_logger()?;
 
     let ctx = AppContext::new().await?;
 
@@ -81,9 +87,6 @@ async fn main() -> Result<()> {
         Some(Commands::SyncExchangeRates) => {
             sync::exchange_rates(&ctx).await?;
         }
-        // Some(Commands::BenchmarkMBF) => {
-            
-        // }
         Some(Commands::Start) => {
             bot::start(ctx).await?;
         }

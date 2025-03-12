@@ -60,9 +60,11 @@ impl Display for TokenId {
     }
 }
 
+/// A token is what we are trading
 #[derive(Clone, Default, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Token {
-    pub id: TokenId,
+    /// The ID of the token
+    id: TokenId,
 }
 
 impl Debug for Token {
@@ -72,7 +74,24 @@ impl Debug for Token {
 }
 
 impl Token {
+    /// Creates a new token with the given ID.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The ID of the token
+    ///
+    #[must_use]
     pub const fn new(id: TokenId) -> Self {
         Self { id }
+    }
+
+    /// Returns the ID of the token.
+    ///
+    /// # Returns
+    ///
+    /// The ID of the token
+    #[must_use]
+    pub const fn id(&self) -> TokenId {
+        self.id
     }
 }

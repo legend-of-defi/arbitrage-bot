@@ -18,12 +18,19 @@ use tokio::net::UnixStream;
 pub struct Order {
     /// The pools to swap through. The order of the pools is important, of course.
     pub pool: Address,
+    /// The amount to swap
     pub amount: U256,
+    /// Whether the amount is in token0
     pub is_token0: bool,
 }
 
+/// A signer for the fly executor
 pub struct Signer {
+    /// The stream to the signer
+    #[allow(dead_code)]
     stream: Option<UnixStream>,
+    /// The path to the socket
+    #[allow(dead_code)]
     socket_path: String,
 }
 
@@ -35,6 +42,7 @@ impl Signer {
     ///
     /// # Errors
     /// * If socket path is invalid
+    #[must_use]
     pub fn new(socket_path: &str) -> Self {
         Self {
             stream: None,
@@ -49,6 +57,7 @@ impl Signer {
     ///
     /// # Errors
     /// * `Error::msg("Stream disconnected")` - If the stream is disconnected
+    #[allow(dead_code)]
     async fn ensure_connected(&mut self) -> Result<()> {
         if self.stream.is_none() {
             self.stream = Some(UnixStream::connect(&self.socket_path).await?);
@@ -65,6 +74,7 @@ impl Signer {
     /// * `Error::msg("Stream disconnected")` - If the stream is disconnected
     /// * `Error::msg("Stream not connected")` - If the stream is not connected
     /// * `Error::msg("Failed to reconnect")` - If the stream is not connected and cannot be reconnected
+    #[allow(dead_code)]
     pub async fn call(&mut self, msg: &Order) -> Result<()> {
         self.ensure_connected().await?;
 

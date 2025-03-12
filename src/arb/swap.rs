@@ -9,14 +9,28 @@ use eyre::{bail, Error};
 use super::pool::{Pool, PoolId};
 use super::token::TokenId;
 
-/// The direction of a swap
+/// The direction of a swap in a liquidity pool.
+///
+/// In a standard liquidity pool with two tokens (token0 and token1),
+/// a swap can go in either direction: from token0 to token1 or from token1 to token0.
 #[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum Direction {
+    /// Swap from token0 to token1 in the pool
     ZeroForOne,
+    /// Swap from token1 to token0 in the pool
     OneForZero,
 }
 
 impl Direction {
+    /// Checks if this direction is the opposite of another direction.
+    ///
+    /// # Arguments
+    ///
+    /// * `other` - The other direction to compare with
+    ///
+    /// # Returns
+    ///
+    /// `true` if the directions are opposite, `false` otherwise
     pub fn is_opposite(&self, other: &Self) -> bool {
         self == &Self::OneForZero && other == &Self::ZeroForOne
             || self == &Self::ZeroForOne && other == &Self::OneForZero
@@ -42,7 +56,9 @@ impl Debug for Direction {
 /// Defines the direction of the swap in a pool
 #[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct SwapId {
+    /// The identifier of the liquidity pool where the swap occurs
     pub pool_id: PoolId,
+    /// The direction of the swap (`ZeroForOne` or `OneForZero`)
     pub direction: Direction,
 }
 
@@ -63,11 +79,17 @@ impl Display for SwapId {
 /// Notably, this does not include swap amounts. That is handled by the `SwapQuote` struct.
 #[derive(Clone, Eq)]
 pub struct Swap {
-    pub id: SwapId,
-    pub token_in: TokenId,
-    pub token_out: TokenId,
+    /// Unique identifier for this swap, containing pool ID and direction
+    id: SwapId,
+    /// The token being swapped in (source token)
+    token_in: TokenId,
+    /// The token being swapped out (destination token)
+    token_out: TokenId,
+    /// The available reserve of the input token in the pool
     reserve_in: Option<U256>,
+    /// The available reserve of the output token in the pool
     reserve_out: Option<U256>,
+    /// The logarithmic exchange rate for this swap
     log_rate: Option<i64>,
 }
 
@@ -138,6 +160,24 @@ impl Hash for Swap {
 }
 
 impl Swap {
+    /// Creates a new swap with the given parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - The unique identifier for this swap
+    /// * `token_in` - The token being swapped in
+    /// * `token_out` - The token being swapped out
+    /// * `reserve_in` - The available reserve of the input token
+    /// * `reserve_out` - The available reserve of the output token
+    ///
+    /// # Returns
+    ///
+    /// A new Swap instance if successful
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input and output tokens are the same,
+    /// or if the reserves are inconsistent (one is Some and the other is None)
     pub fn new(
         id: SwapId,
         token_in: TokenId,
@@ -149,11 +189,11 @@ impl Swap {
             bail!("Swap token0 and token1 must be different");
         }
 
-        assert!(
-            reserve_in.is_none() && reserve_out.is_none()
-                || reserve_in.is_some() && reserve_out.is_some(),
-            "Reserves must be both None or both Some"
-        );
+        if !(reserve_in.is_none() && reserve_out.is_none()
+            || reserve_in.is_some() && reserve_out.is_some())
+        {
+            bail!("Reserves must be both None or both Some");
+        }
 
         let log_rate = match (reserve_in, reserve_out) {
             (Some(reserve_in), Some(reserve_out)) => {
@@ -173,29 +213,80 @@ impl Swap {
         })
     }
 
-    const fn assert_reserves(&self) {
-        assert!(self.has_reserves(), "Swap must have reserves");
+    /// Returns the unique identifier for this swap.
+    ///
+    /// # Returns
+    ///
+    /// The unique identifier for this swap
+    pub fn id(&self) -> SwapId {
+        self.id.clone()
     }
 
+    /// Returns the token being swapped in.
+    ///
+    /// # Returns
+    ///
+    /// The token being swapped in
+    pub const fn token_in(&self) -> TokenId {
+        self.token_in
+    }
+
+    /// Returns the token being swapped out.
+    ///
+    /// # Returns
+    ///
+    /// The token being swapped out
+    pub const fn token_out(&self) -> TokenId {
+        self.token_out
+    }
+
+    /// Returns the logarithmic exchange rate for this swap.
+    ///
+    /// # Returns
+    ///
+    /// The logarithmic exchange rate as an i64
     pub const fn log_rate(&self) -> i64 {
-        self.assert_reserves();
+        // TODO: use typestates to ensure this is never called on a swap without reserves
+        #[allow(clippy::unwrap_used)]
         self.log_rate.unwrap()
     }
 
+    /// Returns the reserve of the input token.
+    ///
+    /// # Returns
+    ///
+    /// The reserve of the input token as a U256
     pub const fn reserve_in(&self) -> U256 {
-        self.assert_reserves();
+        // TODO: use typestates to ensure this is never called on a swap without reserves
+        #[allow(clippy::unwrap_used)]
         self.reserve_in.unwrap()
     }
 
+    /// Returns the reserve of the output token.
+    ///
+    /// # Returns
+    ///
+    /// The reserve of the output token as a U256
     pub const fn reserve_out(&self) -> U256 {
-        self.assert_reserves();
+        // TODO: use typestates to ensure this is never called on a swap without reserves
+        #[allow(clippy::unwrap_used)]
         self.reserve_out.unwrap()
     }
 
+    /// Checks if this swap has reserves for both input and output tokens.
+    ///
+    /// # Returns
+    ///
+    /// `true` if both reserves are present, `false` otherwise
     pub const fn has_reserves(&self) -> bool {
         self.reserve_in.is_some() && self.reserve_out.is_some()
     }
 
+    /// Checks if this swap is missing reserves for either input or output tokens.
+    ///
+    /// # Returns
+    ///
+    /// `true` if either reserve is missing, `false` if both are present
     pub const fn has_no_reserves(&self) -> bool {
         self.reserve_in.is_none() || self.reserve_out.is_none()
     }
@@ -210,6 +301,8 @@ impl Swap {
             pool_id: pool.id.clone(),
             direction: Direction::ZeroForOne,
         };
+        // SAFETY: we know the is valid because we are creating it from a pool which is valid
+        #[allow(clippy::unwrap_used)]
         Self::new(swap_id, token_in, token_out, reserve_in, reserve_out).unwrap()
     }
 
@@ -223,17 +316,9 @@ impl Swap {
             pool_id: pool.id.clone(),
             direction: Direction::OneForZero,
         };
+        // SAFETY: we know the is valid because we are creating it from a pool which is valid
+        #[allow(clippy::unwrap_used)]
         Self::new(swap_id, token_in, token_out, reserve_in, reserve_out).unwrap()
-    }
-
-    /// Returns true if the swap side is the `OneForZero` direction
-    pub fn is_one_for_zero(&self) -> bool {
-        self.id.direction == Direction::OneForZero
-    }
-
-    /// Returns true if the swap side is the `ZeroForOne` direction
-    pub fn is_zero_for_one(&self) -> bool {
-        self.id.direction == Direction::ZeroForOne
     }
 
     /// Returns true if the swap side is the reciprocal of the other swap side,
@@ -241,14 +326,6 @@ impl Swap {
     /// same pool) cycles that are not interesting.
     pub fn is_reciprocal(&self, other: &Self) -> bool {
         self.id.pool_id == other.id.pool_id && self.id.direction.is_opposite(&other.id.direction)
-    }
-
-    /// Estimated gas cost of the swap in WETH
-    /// This is a rough estimate and should not be relied on really.
-    /// This is based on 150k gas for our contract overhead.
-    /// TODO: review, maybe use gas price oracle?
-    pub const fn estimated_gas_cost_in_weth() -> f64 {
-        0.0001
     }
 
     /// Calculate the log rate of a swap for faster computation
@@ -266,6 +343,7 @@ impl Swap {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};

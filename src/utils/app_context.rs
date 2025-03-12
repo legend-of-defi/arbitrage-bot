@@ -23,7 +23,7 @@ use alloy::{
     providers::{ProviderBuilder, WsConnect},
 };
 
-// There has to be a better way to do this
+/// There has to be a better way to do this
 type EthereumProvider = FillProvider<
     JoinFill<
         Identity,
@@ -38,8 +38,10 @@ pub struct AppContext {
     /// Base network provider (local or remote)
     pub base_provider: EthereumProvider,
     /// WebSocket URL for Base network
+    #[allow(dead_code)]
     pub base_provider_websocket_url: String,
     /// Transaction signer
+    #[allow(dead_code)]
     pub signer: Signer,
     /// Diesel async connection pool
     pub db: diesel_async::pooled_connection::deadpool::Pool<AsyncPgConnection>,
@@ -72,6 +74,9 @@ impl AppContext {
         })
     }
 
+    /// Base provider WebSocket URL
+    #[allow(dead_code)]
+    #[must_use]
     pub fn base_provider_websocket_url() -> String {
         "ws://localhost:8546".to_string()
     }

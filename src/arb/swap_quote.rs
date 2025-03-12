@@ -8,21 +8,17 @@ use super::swap::Swap;
 /// optimizer. We need complete quotes for each swap in a cycle (both amount in and amount out).
 #[derive(Debug, Clone)]
 pub struct SwapQuote {
+    /// The amount of tokens input into the swap
     amount_in: U256,
+    /// The amount of tokens output from the swap
     amount_out: U256,
 }
 
 impl SwapQuote {
     /// Creates a new swap quote for the given swap and amount in.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the swap does not have reserves.
+    #[must_use]
     pub fn new(swap: &Swap, amount_in: U256) -> Self {
-        assert!(
-            swap.has_reserves(),
-            "Swap must have reserves to calculate amount out"
-        );
+        // TODO: use typestates to ensure this is never called on a swap without reserves
         let amount_out = Self::calculated_amount_out(swap, amount_in);
 
         Self {
@@ -33,16 +29,23 @@ impl SwapQuote {
 
     /// f64 is a lot, also this function is used in logs only
     #[allow(clippy::cast_precision_loss)]
+    /// This is future functionality.
+    #[must_use]
+    #[allow(dead_code)]
     pub fn rate(&self) -> f64 {
         let amount_out_f64 = self.amount_out.as_limbs()[0] as f64;
         let amount_in_f64 = self.amount_in.as_limbs()[0] as f64;
         amount_out_f64 / amount_in_f64
     }
 
+    /// Returns the amount of tokens input into the swap
+    #[must_use]
     pub const fn amount_in(&self) -> U256 {
         self.amount_in
     }
 
+    /// Returns the amount of tokens output from the swap
+    #[must_use]
     pub const fn amount_out(&self) -> U256 {
         self.amount_out
     }
@@ -68,6 +71,7 @@ impl SwapQuote {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::arb::test_helpers::*;

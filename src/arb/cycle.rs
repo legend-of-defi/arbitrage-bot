@@ -22,6 +22,8 @@ pub struct Cycle {
     pub swaps: Vec<Swap>,
 
     /// Cached best quote for this cycle
+    /// This is future functionality.
+    #[allow(dead_code)]
     best_quote: RefCell<Option<CycleQuote>>,
 }
 
@@ -33,6 +35,9 @@ impl PartialOrd for Cycle {
 
 impl Ord for Cycle {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // SAFETY: we know the cycle has at least one swap because this is enforced by the
+        // constructor
+        #[allow(clippy::unwrap_used)]
         self.swaps
             .first()
             .unwrap()
@@ -122,10 +127,23 @@ impl Cycle {
     }
 
     /// The cycle is quotable if all swaps have reserves
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub fn has_all_reserves(&self) -> bool {
         self.swaps.iter().all(super::swap::Swap::has_reserves)
     }
 
+    /// Returns a list of swaps in the cycle that have no reserves.
+    ///
+    /// This method is useful for identifying which swaps in the cycle
+    /// are preventing it from being quotable.
+    ///
+    /// # Returns
+    ///
+    /// A vector of swaps that have no reserves
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub fn swaps_with_no_reserves(&self) -> Vec<Swap> {
         self.swaps
             .iter()
@@ -135,6 +153,9 @@ impl Cycle {
     }
 
     /// The swap rate of the cycle (a product of all swap rates in the cycle)
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     fn log_rate(&self) -> i64 {
         assert!(
             self.has_all_reserves(),
@@ -146,6 +167,9 @@ impl Cycle {
     /// The optimal `amount_in` to get the maximum `amount_out`
     /// This is using binary search to find the maximum `amount_out`
     /// Memoized for efficiency since this is an expensive calculation
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub fn best_quote(&self) -> Result<CycleQuote, Error> {
         // Check if we already have a cached result
         if let Some(cached) = self.best_quote.borrow().as_ref() {
@@ -212,9 +236,29 @@ impl Cycle {
         // Cache the result
         *self.best_quote.borrow_mut() = Some(best_quote);
 
+        // SAFETY: self.best_quote (even if it's very bad) is always Some
+        #[allow(clippy::unwrap_used)]
         Ok(self.best_quote.borrow().as_ref().unwrap().clone())
     }
 
+    /// Validates a sequence of swaps to ensure they form a valid cycle.
+    ///
+    /// This function checks that:
+    /// - The cycle has at least 2 swaps
+    /// - The first and last tokens in the cycle are the same
+    /// - Each swap's output token matches the next swap's input token
+    ///
+    /// # Arguments
+    ///
+    /// * `swaps` - A vector of swaps to validate
+    ///
+    /// # Returns
+    ///
+    /// Ok(()) if the swaps form a valid cycle, or an error describing why they don't
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the swaps don't form a valid cycle
     fn validate_swaps(swaps: &Vec<Swap>) -> Result<()> {
         if swaps.len() < 2 {
             bail!("Cycle must have at least 2 swaps");
@@ -223,8 +267,8 @@ impl Cycle {
         // First check token matching
         for i in 0..swaps.len() {
             let next = (i + 1) % swaps.len();
-            let current_out_token = swaps[i].token_out;
-            let next_in_token = swaps[next].token_in;
+            let current_out_token = swaps[i].token_out();
+            let next_in_token = swaps[next].token_in();
             if current_out_token != next_in_token {
                 bail!(
                     "Swap {:#?} output token ({:#?}) does not match swap {:#?} input token ({:#?})",
@@ -240,12 +284,14 @@ impl Cycle {
         let mut token_counts = HashMap::new();
         for swap in swaps {
             // Count token0 as input token for current swap
-            *token_counts.entry(swap.token_in).or_insert(0) += 1;
+            *token_counts.entry(swap.token_in()).or_insert(0) += 1;
             // Count token1 as output token for current swap and input for next swap
-            *token_counts.entry(swap.token_out).or_insert(0) += 1;
+            *token_counts.entry(swap.token_out()).or_insert(0) += 1;
 
-            if token_counts.get(&swap.token_in).unwrap() > &2
-                || token_counts.get(&swap.token_out).unwrap() > &2
+            // SAFETY: we know the it has value because we just initialized it 2 lines above
+            #[allow(clippy::unwrap_used)]
+            if token_counts.get(&swap.token_in()).unwrap() > &2
+                || token_counts.get(&swap.token_out()).unwrap() > &2
             {
                 bail!("Cycle contains duplicate tokens");
             }
@@ -272,6 +318,9 @@ impl Cycle {
 
     /// Whether the cycle has a positive rate
     /// This is based merely on pool price. Gas and slippage are not considered.
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub fn is_positive(&self) -> bool {
         assert!(
             self.has_all_reserves(),
@@ -283,12 +332,16 @@ impl Cycle {
     /// Returns a Vec of amounts out for each swap in the cycle, including the final amount
     /// The first element is the input amount, and each subsequent element is the output
     /// amount from that swap
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub fn quote(&self, amount_in: U256) -> CycleQuote {
         CycleQuote::new(self, amount_in)
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use std::hash::DefaultHasher;
 

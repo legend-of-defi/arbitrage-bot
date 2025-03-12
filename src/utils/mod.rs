@@ -1,7 +1,10 @@
+/// App context
 pub mod app_context;
+/// Constants
 pub mod constants;
-pub mod db_connect;
+/// Logger
 pub mod logger;
-pub mod providers;
+/// Signer
 pub mod signer;
+/// Wallet
 pub mod wallet;

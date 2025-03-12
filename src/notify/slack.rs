@@ -3,13 +3,19 @@ use reqwest::Client;
 use serde_json::json;
 use std::time::Duration;
 
+/// Slack notifier
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SlackNotifier {
+    /// The Slack OAuth token
     token: String,
+    /// The HTTP client
     client: Client,
 }
 
+#[allow(dead_code)]
 impl SlackNotifier {
+    /// Create a new Slack notifier
     pub fn new() -> Result<Self> {
         let token = std::env::var("SLACK_OAUTH_TOKEN")
             .map_err(|_| eyre::eyre!("SLACK_OAUTH_TOKEN not set"))?;
@@ -20,6 +26,7 @@ impl SlackNotifier {
         Ok(Self { token, client })
     }
 
+    /// Send a message to a specific channel
     pub async fn send_to(&self, msg: &str, channel: &str) -> Result<()> {
         let payload = json!({
             "channel": channel,
@@ -27,9 +34,6 @@ impl SlackNotifier {
             "username": "Fly Bot",
             "icon_emoji": ":rocket:"
         });
-
-        // Remove debug print in production
-        // println!("Using token: {}", &self.token);
 
         let response = self
             .client
@@ -55,10 +59,12 @@ impl SlackNotifier {
         Ok(())
     }
 
+    /// Send a message to the default channel
     pub async fn send(&self, msg: &str) -> Result<()> {
         self.send_to(msg, "#fly").await
     }
 
+    /// Send an error message to the error channel
     pub async fn send_error(&self, error: &str) -> Result<()> {
         self.send_to(&format!(":warning: Error: {error}"), "#fly-errors")
             .await

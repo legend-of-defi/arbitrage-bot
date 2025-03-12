@@ -12,8 +12,12 @@ use fern::Dispatch;
 /// * If logger configuration fails
 pub fn setup_logger() -> Result<()> {
     Dispatch::new()
-        // Set the default logging level
-        .level(log::LevelFilter::Info)
+        // Set logging level from RUST_LOG env var or default to Info
+        .level(
+            std::env::var("RUST_LOG")
+                .map(|level| level.parse().unwrap_or(log::LevelFilter::Info))
+                .unwrap_or(log::LevelFilter::Info),
+        )
         // Configure logging to console
         .chain(std::io::stdout())
         // Format log messages with time and log level

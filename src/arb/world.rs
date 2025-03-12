@@ -19,9 +19,12 @@ use super::{
     world_update::WorldUpdate,
 };
 
+/// The index of a token in the token vector
 pub type TokenIndex = usize;
+/// The index of a swap in the swap vector
 pub type SwapIndex = usize;
 
+/// The world is the main data structure that holds the state of the world
 #[derive(Debug, Clone, Default)]
 pub struct World {
     /// Tokens indexed by `TokenIndex`
@@ -34,6 +37,9 @@ pub struct World {
     pub swap_vec: Vec<Swap>,
 
     /// `SwapId` to `SwapIndex` mapping
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub swap_map: HashMap<SwapId, SwapIndex>,
 
     /// Adjacency list of `TokenId` (Vertex) to a list of `SwapId` (outgoing edges)
@@ -62,7 +68,7 @@ impl World {
         // Build token_map with capacity
         let mut token_map = HashMap::with_capacity(num_tokens);
         for (token_id, token) in token_vec.iter().enumerate() {
-            token_map.insert(token.id, token_id);
+            token_map.insert(token.id(), token_id);
         }
 
         // Build swap_vec with capacity
@@ -76,7 +82,7 @@ impl World {
         // Build swap_map with capacity
         let mut swap_map = HashMap::with_capacity(num_swaps);
         for (swap_id, swap) in swap_vec.iter().enumerate() {
-            swap_map.insert(swap.id.clone(), swap_id);
+            swap_map.insert(swap.id(), swap_id);
         }
 
         // Build graph with capacity - adjacency list of tokens to swaps
@@ -87,7 +93,7 @@ impl World {
 
         // Add edges (swaps) from each token to its swaps
         for (swap_id, swap) in swap_vec.iter().enumerate() {
-            let token_index = token_map[&swap.token_in];
+            let token_index = token_map[&swap.token_in()];
             graph[token_index].push(swap_id); // Add outgoing edges based on input token
         }
 
@@ -108,25 +114,43 @@ impl World {
 
     /// Update the market with new pool reserves and balances and return affected cycles
     /// Call this once per block with new pools and balances
-    pub fn update(&mut self, pools: &HashSet<Pool>) -> WorldUpdate {
-        let updated_swaps = self.update_swaps(pools.clone());
-        let updated_cycles = self.update_cycles(&updated_swaps);
-        WorldUpdate::new(updated_cycles)
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
+    pub fn update(&mut self, _pools: &HashSet<Pool>) -> WorldUpdate {
+        todo!()
+        // let updated_swaps = self.update_swaps(pools.clone());
+        // let updated_cycles = self.update_cycles(&updated_swaps);
+        // WorldUpdate::new(updated_cycles)
     }
 
-    // Update the swaps in the market and return the updated swaps
+    /// Updates the swaps in the world based on the updated pools.
+    ///
+    /// This method updates the internal swap vectors and maps with the latest
+    /// pool information, and returns a vector of the updated swaps.
+    ///
+    /// # Arguments
+    ///
+    /// * `updated_pools` - A set of pools with updated information
+    ///
+    /// # Returns
+    ///
+    /// A vector of swaps that were updated
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     fn update_swaps(&mut self, updated_pools: HashSet<Pool>) -> Vec<Swap> {
         let mut updated_swaps = Vec::with_capacity(updated_pools.len() * 2);
 
         for pool in updated_pools {
             let forward = Swap::forward(&pool);
-            if let Some(&swap_id) = self.swap_map.get(&forward.id) {
+            if let Some(&swap_id) = self.swap_map.get(&forward.id()) {
                 self.swap_vec[swap_id] = forward.clone();
                 updated_swaps.push(forward);
             }
 
             let reverse = Swap::reverse(&pool);
-            if let Some(&swap_id) = self.swap_map.get(&reverse.id) {
+            if let Some(&swap_id) = self.swap_map.get(&reverse.id()) {
                 self.swap_vec[swap_id] = reverse.clone();
                 updated_swaps.push(reverse);
             }
@@ -135,7 +159,19 @@ impl World {
         updated_swaps
     }
 
-    // Update the cycles in the market and return the updated cycles
+    /// Updates the cycles in the world based on the updated swaps.
+    ///
+    /// This method filters the existing cycles to include only those
+    /// that contain at least one of the updated swaps.
+    ///
+    /// # Arguments
+    ///
+    /// * `updated_swaps` - A slice of swaps that were updated
+    ///
+    /// # Returns
+    ///
+    /// A vector of cycles that were affected by the updated swaps
+    #[allow(dead_code)]
     fn update_cycles(&self, updated_swaps: &[Swap]) -> Vec<Cycle> {
         // Filter all_cycles to only include cycles with at least one updated swap
         let updated_set: HashSet<Swap> = updated_swaps.iter().cloned().collect();
@@ -144,7 +180,7 @@ impl World {
             .iter()
             .filter(|cycle| {
                 cycle.swaps.iter().any(|swap| {
-                    if let Some(&swap_id) = self.swap_map.get(&swap.id) {
+                    if let Some(&swap_id) = self.swap_map.get(&swap.id()) {
                         updated_set.contains(&self.swap_vec[swap_id])
                     } else {
                         false
@@ -155,6 +191,11 @@ impl World {
             .collect()
     }
 
+    /// Returns a vector of all cycles in the world.
+    ///
+    /// # Returns
+    ///
+    /// A vector containing all cycles
     fn cycle_vec(&self) -> Vec<Cycle> {
         // Even though Cycle itself is mutable, the way we calculate hash is immutable
         #[allow(clippy::mutable_key_type)]
@@ -216,11 +257,11 @@ impl World {
             let swap = &self.swap_vec[swap_id];
 
             // Only consider swaps where current token is the input token
-            if swap.token_in != self.token_vec[current_token].id {
+            if swap.token_in() != self.token_vec[current_token].id() {
                 continue;
             }
 
-            let output_token = swap.token_out;
+            let output_token = swap.token_out();
             if !self.token_map.contains_key(&output_token) {
                 continue;
             }
@@ -247,6 +288,7 @@ impl World {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use alloy::primitives::map::HashMap;
@@ -264,7 +306,7 @@ mod tests {
 
         assert_eq!(
             market.token_map,
-            HashMap::from([(token("B").id, 1), (token("A").id, 0),])
+            HashMap::from([(token("B").id(), 1), (token("A").id(), 0),])
         );
 
         assert_eq!(
@@ -316,7 +358,11 @@ mod tests {
 
         assert_eq!(
             market.token_map,
-            HashMap::from([(token("A").id, 0), (token("B").id, 1), (token("C").id, 2),])
+            HashMap::from([
+                (token("A").id(), 0),
+                (token("B").id(), 1),
+                (token("C").id(), 2),
+            ])
         );
 
         assert_eq!(
@@ -355,7 +401,7 @@ mod tests {
 
         assert_eq!(
             world.token_map,
-            HashMap::from([(token("B").id, 1), (token("A").id, 0),])
+            HashMap::from([(token("B").id(), 1), (token("A").id(), 0),])
         );
 
         assert_eq!(
