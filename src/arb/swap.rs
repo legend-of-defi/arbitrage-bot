@@ -31,6 +31,7 @@ impl Direction {
     /// # Returns
     ///
     /// `true` if the directions are opposite, `false` otherwise
+    #[must_use]
     pub fn is_opposite(&self, other: &Self) -> bool {
         self == &Self::OneForZero && other == &Self::ZeroForOne
             || self == &Self::ZeroForOne && other == &Self::OneForZero
@@ -218,6 +219,7 @@ impl Swap {
     /// # Returns
     ///
     /// The unique identifier for this swap
+    #[must_use]
     pub fn id(&self) -> SwapId {
         self.id.clone()
     }
@@ -227,6 +229,7 @@ impl Swap {
     /// # Returns
     ///
     /// The token being swapped in
+    #[must_use]
     pub const fn token_in(&self) -> TokenId {
         self.token_in
     }
@@ -236,6 +239,7 @@ impl Swap {
     /// # Returns
     ///
     /// The token being swapped out
+    #[must_use]
     pub const fn token_out(&self) -> TokenId {
         self.token_out
     }
@@ -245,6 +249,11 @@ impl Swap {
     /// # Returns
     ///
     /// The logarithmic exchange rate as an i64
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `log_rate` is None, which occurs when the swap doesn't have reserves
+    #[must_use]
     pub const fn log_rate(&self) -> i64 {
         // TODO: use typestates to ensure this is never called on a swap without reserves
         #[allow(clippy::unwrap_used)]
@@ -256,6 +265,11 @@ impl Swap {
     /// # Returns
     ///
     /// The reserve of the input token as a U256
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `reserve_in` is None, which occurs when the swap doesn't have reserves
+    #[must_use]
     pub const fn reserve_in(&self) -> U256 {
         // TODO: use typestates to ensure this is never called on a swap without reserves
         #[allow(clippy::unwrap_used)]
@@ -267,6 +281,11 @@ impl Swap {
     /// # Returns
     ///
     /// The reserve of the output token as a U256
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `reserve_out` is None, which occurs when the swap doesn't have reserves
+    #[must_use]
     pub const fn reserve_out(&self) -> U256 {
         // TODO: use typestates to ensure this is never called on a swap without reserves
         #[allow(clippy::unwrap_used)]
@@ -278,6 +297,7 @@ impl Swap {
     /// # Returns
     ///
     /// `true` if both reserves are present, `false` otherwise
+    #[must_use]
     pub const fn has_reserves(&self) -> bool {
         self.reserve_in.is_some() && self.reserve_out.is_some()
     }
@@ -287,11 +307,17 @@ impl Swap {
     /// # Returns
     ///
     /// `true` if either reserve is missing, `false` if both are present
+    #[must_use]
     pub const fn has_no_reserves(&self) -> bool {
         self.reserve_in.is_none() || self.reserve_out.is_none()
     }
 
     /// Create a new swap side for the forward direction: token0 -> token1
+    ///
+    /// # Panics
+    ///
+    /// Panics if the created swap is invalid, which should never happen when creating from a valid pool
+    #[must_use]
     pub fn forward(pool: &Pool) -> Self {
         let token_in = pool.token0;
         let token_out = pool.token1;
@@ -307,6 +333,11 @@ impl Swap {
     }
 
     /// Create a new swap side for the reverse direction: token1 -> token0
+    ///
+    /// # Panics
+    ///
+    /// Panics if the created swap is invalid, which should never happen when creating from a valid pool
+    #[must_use]
     pub fn reverse(pool: &Pool) -> Self {
         let token_in = pool.token1;
         let token_out = pool.token0;
@@ -324,6 +355,7 @@ impl Swap {
     /// Returns true if the swap side is the reciprocal of the other swap side,
     /// i.e. it has the same pool but opposite direction. This is used to avoid trivial (within the
     /// same pool) cycles that are not interesting.
+    #[must_use]
     pub fn is_reciprocal(&self, other: &Self) -> bool {
         self.id.pool_id == other.id.pool_id && self.id.direction.is_opposite(&other.id.direction)
     }
