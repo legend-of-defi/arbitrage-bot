@@ -1,0 +1,123 @@
+wtf:
+  colors:
+    border:
+      focusable: "lightblue"
+      focused: "blue"
+      normal: "gray"
+    title: "red"
+  grid:
+    columns: [50, 50, 50, 50]
+    rows: [6,6,6,6,6,6]
+  refreshInterval: 5
+  mods:
+    counts:
+      type: "cmdrunner"
+      title: "Totals"
+      refreshInterval: 10
+      enabled: true
+      position:
+        top: 0
+        left: 0
+        height: 1
+        width: 1
+      cmd: "script/dashboard/db-count.sh"
+      wrapText: false
+
+    chains:
+      type: "cmdrunner"
+      title: "Latest Blocks"
+      refreshInterval: 2
+      enabled: true
+      position:
+        top: 0
+        left: 1
+        height: 1
+        width: 1
+      cmd: "script/dashboard/latest-blocks.sh"
+      wrapText: false
+
+    sysinfo:
+      type: "cmdrunner"
+      title: "System Resources"
+      refreshInterval: 3
+      enabled: true
+      position:
+        top: 0
+        left: 2
+        height: 1
+        width: 1
+      cmd: "script/dashboard/system-stats.sh"
+      wrapText: false
+
+    # factories:
+    #   type: "bargraph"
+    #   title: "Factories"
+    #   refreshInterval: 10
+    #   enabled: true
+    #   position:
+    #     top: 0
+    #     left: 2
+    #     height: 2
+    #     width: 1
+    #   graphIcon: "■"
+    #   graphIconColor: "yellow"
+    #   sqlDatabaseDSN: "${DATABASE_URL}"
+    #   sql: "SELECT COUNT(*) as count FROM factories"
+    #   bars:
+    #     - Factories
+    #   labelColor: "yellow"
+
+    # factoryStatus:
+    #   type: "postgresql"
+    #   title: "Factory Status"
+    #   refreshInterval: 10
+    #   enabled: true
+    #   position:
+    #     top: 2
+    #     left: 0
+    #     height: 2
+    #     width: 2
+    #   connectionString: "${DATABASE_URL}"
+    #   sqlQuery: "SELECT status, COUNT(*) as count FROM factories GROUP BY status"
+
+    # topPairs:
+    #   type: "postgresql"
+    #   title: "Top Pairs by USD"
+    #   refreshInterval: 10
+    #   enabled: true
+    #   position:
+    #     top: 2
+    #     left: 2
+    #     height: 2
+    #     width: 2
+    #   connectionString: "${DATABASE_URL}"
+    #   sqlQuery: "SELECT address, usd FROM pairs WHERE usd IS NOT NULL AND usd > 0 ORDER BY usd DESC LIMIT 10"
+
+    # recentPairs:
+    #   type: "postgresql"
+    #   title: "Recent Pairs"
+    #   refreshInterval: 10
+    #   enabled: true
+    #   position:
+    #     top: 4
+    #     left: 0
+    #     height: 2
+    #     width: 4
+    #   connectionString: "${DATABASE_URL}"
+    #   sqlQuery: "SELECT address, created_at FROM pairs ORDER BY created_at DESC LIMIT 5"
+
+    # Alternative approach using powergrid
+    # totalPairsAlt:
+    #   type: "powergrid"
+    #   title: "Total Pairs (Alt)"
+    #   refreshInterval: 10
+    #   enabled: true
+    #   position:
+    #     top: 0
+    #     left: 1
+    #     height: 2
+    #     width: 1
+    #   database:
+    #     driver: "postgres"
+    #     dsn: "${DATABASE_URL}"
+    #   sqlquery: "SELECT COUNT(*) as \"Total Pairs\" FROM pairs"

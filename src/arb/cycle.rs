@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 /// Cycle is a Vec<Swap> that forms a cycle (first and last token are the same)
 /// It is primarily used to calculate its profitability exploitability, best amounts in, etc.
@@ -85,7 +83,6 @@ impl Hash for Cycle {
     }
 }
 
-#[allow(dead_code)]
 impl Cycle {
     /// Creates a new cycle from a vector of swap sides
     ///
@@ -131,6 +128,7 @@ impl Cycle {
 
     /// The cycle is quotable if all swaps have reserves
     /// This is future functionality.
+    #[allow(dead_code)]
     pub fn has_all_reserves(&self) -> bool {
         self.swaps.iter().all(super::swap::Swap::has_reserves)
     }
@@ -145,6 +143,7 @@ impl Cycle {
     /// A vector of swaps that have no reserves
     ///
     /// This is future functionality.
+    #[allow(dead_code)]
     pub fn swaps_with_no_reserves(&self) -> Vec<Swap> {
         self.swaps
             .iter()
@@ -156,6 +155,7 @@ impl Cycle {
     /// The swap rate of the cycle (a product of all swap rates in the cycle)
     ///
     /// This is future functionality.
+    #[allow(dead_code)]
     fn log_rate(&self) -> i64 {
         assert!(
             self.has_all_reserves(),
@@ -164,20 +164,12 @@ impl Cycle {
         self.swaps.iter().map(super::swap::Swap::log_rate).sum()
     }
 
-    /// Returns the best quote for this cycle if available.
-    /// 
-    /// # Returns
-    /// 
-    /// A Result containing the best `CycleQuote` if successful.
-    /// 
-    /// # Panics
-    /// 
-    /// Panics if the internal `best_quote` `RefCell` contains a value that is accessed with `unwrap()` 
-    /// but is actually `None`.
-    /// 
-    /// # Errors
-    /// 
-    /// Returns an error if no valid quote is available for this cycle or if the quote calculation failed.
+    /// The optimal `amount_in` to get the maximum `amount_out`
+    /// This is using binary search to find the maximum `amount_out`
+    /// Memoized for efficiency since this is an expensive calculation
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub fn best_quote(&self) -> Result<CycleQuote, Error> {
         // Check if we already have a cached result
         if let Some(cached) = self.best_quote.borrow().as_ref() {
@@ -324,16 +316,11 @@ impl Cycle {
         Ok(())
     }
 
-    /// Checks if the cycle has a positive profit expectation.
-    /// 
-    /// # Returns
-    /// 
-    /// `true` if the cycle has a positive profit expectation, `false` otherwise.
-    /// 
-    /// # Panics
-    /// 
-    /// Panics if the cycle does not have reserves for all swaps in the cycle,
-    /// as checked by the `has_all_reserves()` method.
+    /// Whether the cycle has a positive rate
+    /// This is based merely on pool price. Gas and slippage are not considered.
+    ///
+    /// This is future functionality.
+    #[allow(dead_code)]
     pub fn is_positive(&self) -> bool {
         assert!(
             self.has_all_reserves(),
@@ -347,6 +334,7 @@ impl Cycle {
     /// amount from that swap
     ///
     /// This is future functionality.
+    #[allow(dead_code)]
     pub fn quote(&self, amount_in: U256) -> CycleQuote {
         CycleQuote::new(self, amount_in)
     }

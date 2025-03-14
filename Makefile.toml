@@ -9,6 +9,7 @@ script = [
 dependencies = ["build-release"]
 script = [
     "sudo systemctl stop fly",
+    "diesel migration run",
     "sudo cp target/release/fly /usr/bin/fly",
     "sudo systemctl start fly"
 ]
@@ -16,3 +17,9 @@ script = [
 [tasks.build-release]
 command = "cargo"
 args = ["build", "--release"]
+
+[tasks.dashboard]
+description = "Run the WTF dashboard"
+script = [
+    "wtfutil --config=script/dashboard/config.yml"
+]

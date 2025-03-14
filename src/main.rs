@@ -51,6 +51,8 @@ enum Commands {
     SyncPairCreatedEvents,
     /// [DEBUG] Sync exchange rates
     SyncExchangeRates,
+    /// [DEBUG] Sync WETH price from Moralis API
+    SyncWeth,
     /// Start the bot
     Start,
 }
@@ -86,6 +88,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::SyncExchangeRates) => {
             sync::exchange_rates(&ctx).await?;
+        }
+        Some(Commands::SyncWeth) => {
+            sync::weth(&ctx).await?;
         }
         Some(Commands::Start) => {
             bot::start(ctx).await?;

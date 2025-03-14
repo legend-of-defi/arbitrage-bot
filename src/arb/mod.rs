@@ -1,28 +1,42 @@
-//! # Arbitrage Module
-//!
-//! This module contains core arbitrage detection and execution logic.
-//! It provides tools for identifying profitable trading opportunities
-//! across multiple pools and calculating optimal execution strategies.
+/*!
+ * # Arbitrage Module
+ *
+ * This module contains the core logic for detecting and executing arbitrage opportunities
+ * across decentralized exchanges. It implements graph-based algorithms to find profitable
+ * trading cycles and provides mechanisms to execute these trades.
+ *
+ * ## Key Components
+ *
+ * - `cycle`: Defines the `Cycle` struct representing a sequence of swaps forming a trading cycle
+ * - `cycle_quote`: Provides quote calculation for cycles to determine profitability
+ * - `pool`: Represents liquidity pools where tokens can be exchanged
+ * - `portfolio`: Manages token holdings and balances
+ * - `swap`: Defines individual swap operations between tokens
+ * - `swap_quote`: Calculates expected outputs for individual swaps
+ * - `token`: Token identification and metadata
+ * - `world`: Graph representation of the trading environment
+ * - `world_update`: Mechanisms to update the world state based on new information
+ */
 
-/// Core cycle detection and analysis
-pub mod cycle;
-/// Quote generation for cycles
+/// Core cycle detection and representation
+mod cycle;
+/// Cycle profitability calculation
 mod cycle_quote;
-/// Pool data structures and operations
+/// Liquidity pool representation and operations
 pub mod pool;
-/// Portfolio management
+/// Token portfolio management
 mod portfolio;
-/// Swap execution and modeling
-pub mod swap;
-/// Swap quote generation
+/// Individual swap operations
+mod swap;
+/// Swap quote calculation
 pub mod swap_quote;
-/// Test helpers and utilities
+/// Helpers for testing
 mod test_helpers;
-/// Token data structures and utilities
+/// Token identification and metadata
 pub mod token;
-/// Common type definitions
-pub mod types;
-/// Market world state
+/// Common types used across the arbitrage module
+mod types;
+/// Graph representation of the trading environment
 pub mod world;
 /// World state update mechanisms
-pub mod world_update;
+mod world_update;

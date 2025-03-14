@@ -13,6 +13,7 @@ pub struct Token {
     /// The ID of the token
     id: i32,
     /// The address of the token
+    #[allow(dead_code)]
     address: DBAddress,
     /// The symbol of the
     #[allow(dead_code)]
@@ -58,22 +59,10 @@ pub struct TokenParams {
 }
 
 impl Token {
-    /// Get the address of the token
-    #[must_use]
-    pub fn address(&self) -> Address {
-        self.address.value
-    }
-
     /// Get the ID of the token
     #[must_use]
     pub fn id(&self) -> i32 {
         self.id
-    }
-
-    /// Get the decimals of the token
-    #[must_use]
-    pub fn decimals(&self) -> Option<i32> {
-        self.decimals
     }
 }
 

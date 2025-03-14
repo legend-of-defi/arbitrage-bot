@@ -1,0 +1,38 @@
+totalPairs:
+  type: "bargraph"
+  title: "Total Pairs"
+  refreshInterval: 10
+  enabled: true
+  position:
+    top: 0
+    left: 0
+    height: 2
+    width: 1
+  graphIcon: "blue"
+  sqlDatabaseDSN: "${DATABASE_URL}"
+
+pairsWithUsd:
+  type: "bargraph"
+  title: "Pairs with USD"
+  refreshInterval: 10
+  enabled: true
+  position:
+    top: 0
+    left: 1
+    height: 2
+    width: 1
+  graphIcon: "green"
+  sqlDatabaseDSN: "${DATABASE_URL}"
+
+factories:
+  type: "bargraph"
+  title: "Factories"
+  refreshInterval: 10
+  enabled: true
+  position:
+    top: 0
+    left: 2
+    height: 2
+    width: 1
+  graphIcon: "yellow"
+  sqlDatabaseDSN: "${DATABASE_URL}"

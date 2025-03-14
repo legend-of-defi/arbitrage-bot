@@ -92,8 +92,8 @@ impl AppContext {
     /// * If connection fails
     /// * If provider initialization fails
     pub async fn create_new_provider() -> Result<EthereumProvider> {
-        if let Ok(api_key) = env::var("FLY_ALCHEMY_API_KEY") {
-            info!("Using remote provider with API key {}", api_key);
+        if let Ok(_api_key) = env::var("FLY_ALCHEMY_API_KEY") {
+            // info!("Using remote provider with API key {}", api_key);
             let ws_url =
                 "wss://base-mainnet.g.alchemy.com/v2/pzwXUHHsvHjgeSCT5rW_whOyYo7kas4d".to_string();
             let ws = WsConnect::new(&ws_url);

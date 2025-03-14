@@ -58,6 +58,14 @@ pub mod sync_events;
 /// # Errors
 /// Returns an error if the database connection fails
 pub mod usd;
+/// Sync WETH price from Moralis API
+///
+/// This module contains functionality for fetching and updating the WETH price
+/// from the Moralis API.
+///
+/// # Errors
+/// Returns an error if the API call fails or the database connection fails
+pub mod weth;
 
 pub use exchange_rates::exchange_rates;
 pub use factories::factories;
@@ -67,3 +75,4 @@ pub use pair_tokens::pair_tokens;
 pub use reserves::reserves;
 pub use sync_events::events;
 pub use usd::usd;
+pub use weth::weth;

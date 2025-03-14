@@ -70,6 +70,14 @@ pub async fn start(ctx: AppContext) -> Result<()> {
         }
     });
 
+    // Spawn WETH price sync task
+    let ctx8 = Arc::clone(&ctx);
+    tokio::spawn(async move {
+        if let Err(e) = sync::weth(&ctx8).await {
+            log::error!("{}", e);
+        }
+    });
+
     // Wait for all spawned tasks to complete
     tokio::signal::ctrl_c().await?;
     log::info!("Received shutdown signal, waiting for tasks to complete...");

@@ -16,6 +16,8 @@ type DbConn = diesel_async::AsyncPgConnection;
 const BATCH_SIZE: i64 = 100;
 /// ID of WETH token in our database
 const WETH_TOKEN_ID: i32 = 3;
+/// WETH token address
+const WETH_ADDRESS: &str = "0x4200000000000000000000000000000000000006";
 /// Hardcoded WETH price in USD for now
 const WETH_USD_PRICE: f64 = 2100.0;
 /// Maximum decimal places to allow for tokens
@@ -57,7 +59,11 @@ async fn sync(ctx: &AppContext, _limit: i64) -> Result<usize> {
 
     // Track processed tokens and update counts
     let mut processed_token_ids = HashSet::new();
-    processed_token_ids.insert(WETH_TOKEN_ID); // Consider WETH already processed
+
+    // Get WETH token ID by address
+    let weth_id = get_weth_token_id(&mut conn).await?;
+
+    processed_token_ids.insert(weth_id); // Consider WETH already processed
 
     let mut updated_count = 0;
     let mut iteration = 0;
@@ -134,7 +140,7 @@ async fn sync(ctx: &AppContext, _limit: i64) -> Result<usize> {
                         "sync::exchange_rates: Updated exchange rate for token {} (ID: {}) based on {} (ID: {}): ${}",
                         token_address,
                         unknown_token_id,
-                        if known_token_id == WETH_TOKEN_ID { "WETH".to_string() } else { format!("token {known_token_id}") },
+                        if known_token_id == get_weth_token_id(&mut conn).await? { "WETH".to_string() } else { format!("token {known_token_id}") },
                         known_token_id,
                         token_price
                     );
@@ -169,7 +175,7 @@ async fn sync(ctx: &AppContext, _limit: i64) -> Result<usize> {
 async fn update_weth_price(conn: &mut DbConn, timestamp: chrono::NaiveDateTime) -> Result<()> {
     let weth_price = BigDecimal::from_str(&WETH_USD_PRICE.to_string())?;
 
-    diesel::update(tokens::table.filter(tokens::id.eq(WETH_TOKEN_ID)))
+    diesel::update(tokens::table.filter(tokens::address.eq(WETH_ADDRESS)))
         .set((
             tokens::exchange_rate.eq(&weth_price),
             tokens::updated_last.eq(timestamp),
@@ -398,4 +404,14 @@ async fn get_token_address(conn: &mut DbConn, token_id: i32) -> Result<String> {
         .await?;
 
     Ok(address)
+}
+
+/// Helper function to get the WETH token ID by its address
+async fn get_weth_token_id(conn: &mut DbConn) -> Result<i32> {
+    tokens::table
+        .filter(tokens::address.eq(WETH_ADDRESS))
+        .select(tokens::id)
+        .first::<i32>(conn)
+        .await
+        .or_else(|_| Ok(WETH_TOKEN_ID)) // Fallback to constant if query fails
 }
